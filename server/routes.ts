@@ -20,7 +20,19 @@ const authLimiter = rateLimit({
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: process.env.NODE_ENV === 'development' ? 1000 : 100, // More generous limit for development
+  skip: (req) => {
+    // Skip rate limiting for Vite HMR and static assets in development
+    if (process.env.NODE_ENV === 'development') {
+      return req.path.includes('/@vite/') || 
+             req.path.includes('/src/') || 
+             req.path.includes('.js') || 
+             req.path.includes('.css') || 
+             req.path.includes('.map') ||
+             req.path.includes('__vite');
+    }
+    return false;
+  },
   standardHeaders: true,
   legacyHeaders: false,
 });
