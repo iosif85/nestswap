@@ -38,8 +38,18 @@ const generalLimiter = rateLimit({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Security middleware
-  app.use(helmet());
+  // Security middleware - relaxed CSP for development
+  app.use(helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === 'development' ? false : {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'", "ws:", "wss:"],
+      },
+    },
+  }));
   app.use(generalLimiter);
 
   // Health check
