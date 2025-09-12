@@ -1,8 +1,12 @@
 import { useState } from 'react';
+import { useLocation } from 'wouter';
+import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Check, X, CreditCard, MessageSquare, Repeat, Shield } from 'lucide-react';
+import { Check, X, CreditCard, MessageSquare, Repeat, Shield, ExternalLink } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 
 interface PaywallModalProps {
   isOpen: boolean;
@@ -17,16 +21,55 @@ export default function PaywallModal({
   onUpgrade = () => console.log('Upgrade clicked'),
   feature = 'swap request'
 }: PaywallModalProps) {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Quick subscribe mutation for one-click upgrade
+  const createSubscriptionMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('POST', '/api/create-subscription', {});
+    },
+    onSuccess: (data) => {
+      if (data?.mockMode) {
+        toast({
+          title: 'Success!',
+          description: 'Your NestSwap membership is now active! (Development mode)',
+        });
+      } else {
+        toast({
+          title: 'Success!',
+          description: 'Your NestSwap membership is now active!',
+        });
+      }
+      onUpgrade();
+      onClose();
+      
+      // Invalidate relevant queries instead of page reload
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/subscription-status'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create subscription',
+        variant: 'destructive',
+      });
+    },
+  });
 
   const handleUpgrade = async () => {
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      await createSubscriptionMutation.mutateAsync();
+    } finally {
       setIsLoading(false);
-      onUpgrade();
-      onClose();
-    }, 1000);
+    }
+  };
+
+  const handleViewFullPage = () => {
+    onClose();
+    setLocation('/subscribe');
   };
 
   const membershipFeatures = [
@@ -110,11 +153,21 @@ export default function PaywallModal({
             <Button
               className="w-full"
               onClick={handleUpgrade}
-              disabled={isLoading}
+              disabled={isLoading || createSubscriptionMutation.isPending}
               data-testid="button-upgrade-paywall"
             >
               <CreditCard className="h-4 w-4 mr-2" />
-              {isLoading ? 'Processing...' : 'Upgrade for £10/year'}
+              {isLoading || createSubscriptionMutation.isPending ? 'Processing...' : 'Upgrade for £10/year'}
+            </Button>
+            
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleViewFullPage}
+              data-testid="button-view-details"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              View Full Details
             </Button>
             
             <Button

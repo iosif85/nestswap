@@ -67,6 +67,8 @@ export interface IStorage {
   
   // Photo operations
   addPhotosToListing(listingId: string, photos: Omit<InsertPhoto, 'listingId'>[]): Promise<Photo[]>;
+  addPhoto(photo: Omit<InsertPhoto, 'id'>): Promise<Photo>;
+  getPhotoById(id: string): Promise<Photo | undefined>;
   deletePhoto(photoId: string): Promise<void>;
   
   // Availability operations
@@ -358,7 +360,7 @@ export class PostgresStorage implements IStorage {
             )
           )
         )`.as('distance')
-      });
+      }).from(listings);
     } else {
       selectClause = db.select().from(listings);
     }
@@ -394,17 +396,11 @@ export class PostgresStorage implements IStorage {
         break;
     }
 
-    const query = coordinates ? 
-      selectClause.from(listings)
-        .where(and(...conditions))
-        .orderBy(orderBy)
-        .limit(limit || 20)
-        .offset(((page || 1) - 1) * (limit || 20)) :
-      db.select().from(listings)
-        .where(and(...conditions))
-        .orderBy(orderBy)
-        .limit(limit || 20)
-        .offset(((page || 1) - 1) * (limit || 20));
+    const query = selectClause
+      .where(and(...conditions))
+      .orderBy(orderBy)
+      .limit(limit || 20)
+      .offset(((page || 1) - 1) * (limit || 20));
 
     // Get total count before applying pagination
     const countQuery = coordinates ? 
@@ -419,18 +415,18 @@ export class PostgresStorage implements IStorage {
     const foundListings = await query;
 
     // Batch fetch photos and owners for better performance
-    const listingIds = foundListings.map(l => l.id);
-    const allPhotos = await db.select().from(photos)
-      .where(inArray(photos.listingId, listingIds))
-      .orderBy(asc(photos.position));
+    const listingIds = foundListings.map((l: Listing) => l.id);
+    const allPhotos = listingIds.length > 0 ? await db.select().from(photos)
+      .where(inArray(photos.listingId, listingIds as string[]))
+      .orderBy(asc(photos.position)) : [];
 
-    const ownerIds = [...new Set(foundListings.map(l => l.ownerId))];
-    const allOwners = await db.select({
+    const ownerIds = Array.from(new Set(foundListings.map((l: Listing) => l.ownerId)));
+    const allOwners = ownerIds.length > 0 ? await db.select({
       id: users.id,
       name: users.name,
       avatarUrl: users.avatarUrl,
       isVerified: users.isVerified,
-    }).from(users).where(inArray(users.id, ownerIds));
+    }).from(users).where(inArray(users.id, ownerIds as string[])) : [];
 
     // Group photos by listing ID
     const photosByListing = allPhotos.reduce((acc, photo) => {
@@ -446,7 +442,7 @@ export class PostgresStorage implements IStorage {
     }, {} as Record<string, any>);
 
     // Combine results
-    const results: ListingWithPhotos[] = foundListings.map(listing => ({
+    const results: ListingWithPhotos[] = foundListings.map((listing: Listing) => ({
       ...listing,
       photos: photosByListing[listing.id] || [],
       owner: ownersById[listing.ownerId],
@@ -463,6 +459,16 @@ export class PostgresStorage implements IStorage {
     }));
     
     return await db.insert(photos).values(photosToInsert).returning();
+  }
+
+  async addPhoto(photoData: Omit<InsertPhoto, 'id'>): Promise<Photo> {
+    const [photo] = await db.insert(photos).values(photoData).returning();
+    return photo;
+  }
+
+  async getPhotoById(id: string): Promise<Photo | undefined> {
+    const [photo] = await db.select().from(photos).where(eq(photos.id, id));
+    return photo;
   }
 
   async deletePhoto(photoId: string): Promise<void> {
