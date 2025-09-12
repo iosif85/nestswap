@@ -1,0 +1,482 @@
+Act as a senior full-stack engineer. Build a production-ready MVP called NestSwap—a caravan/cabin exchange platform. Generate a complete codebase that runs in Replit with one click, including frontend, backend, database, billing, tests, seed data, and docs. Follow the specification below exactly.
+
+0) Product Summary
+
+Goal: Owners list caravans/cabins and swap stays. Users can register, verify email, log in, create/manage listings with photos and per-day availability, browse/search with map, message owners, and—only if subscribed (£10/year)—request/manage swaps.
+
+Language/Region: English only.
+
+IDE/Hosting: Replit (front + back in one workspace).
+
+1) Tech Stack
+
+Frontend
+
+React (Vite + TypeScript), React Router, React Query, Tailwind CSS.
+
+Leaflet + OpenStreetMap (map & markers).
+
+Clean, accessible UI—palette: mountain green, blues, earthy tones; Inter font.
+
+Backend
+
+Python Flask (REST), SQLAlchemy + Alembic, Marshmallow (or Pydantic-like schemas).
+
+Auth: Flask-JWT-Extended (JWT in HttpOnly cookies) + CSRF (double-submit token).
+
+Mail: Flask-Mail (SMTP) for verification & password reset (log to console if no SMTP).
+
+Security: Argon2 (preferred) or bcrypt for password hashing, Flask-Limiter for rate limits, Flask-CORS, input sanitization (bleach).
+
+Billing: Stripe Subscriptions (Checkout + Billing Portal + Webhooks).
+
+Database
+
+SQLite (development), with migrations.
+
+Testing
+
+pytest: auth, listings, swaps, and billing gates.
+
+2) Repository/File Structure
+/nestswap
+  /backend
+    app.py
+    config.py
+    database.py
+    extensions.py              # jwt, limiter, cors, csrf, mail, stripe init
+    /models
+      __init__.py
+      user.py
+      listing.py
+      photo.py
+      availability.py
+      message.py
+      swap.py
+    /schemas
+      __init__.py
+      user_schema.py
+      listing_schema.py
+      message_schema.py
+      swap_schema.py
+    /routes
+      __init__.py
+      health.py
+      auth.py
+      users.py
+      listings.py
+      uploads.py
+      messages.py
+      swaps.py
+      admin.py
+      billing.py               # Stripe: checkout, portal, webhook
+    /services
+      email_service.py
+      auth_service.py
+      search_service.py
+      availability_service.py
+      billing_service.py       # optional helpers
+    /migrations
+    /static/uploads
+    /tests
+      conftest.py
+      test_auth.py
+      test_listings.py
+      test_swaps.py
+      test_billing_gate.py
+    requirements.txt
+  /frontend
+    index.html
+    vite.config.ts
+    /src
+      main.tsx
+      App.tsx
+      /routes/router.tsx
+      /api
+        client.ts
+        auth.ts
+        listings.ts
+        messages.ts
+        swaps.ts
+        billing.ts             # (implement per spec below)
+        admin.ts
+      /components
+        NavBar.tsx
+        Footer.tsx
+        Button.tsx
+        Card.tsx
+        Input.tsx
+        TextArea.tsx
+        DatePicker.tsx
+        Map.tsx
+        AvailabilityCalendar.tsx
+        ProtectedRoute.tsx
+        Toast.tsx
+        PaywallModal.tsx       # (implement per spec below)
+      /features
+        /auth
+          Register.tsx
+          Login.tsx
+          VerifyEmail.tsx
+          RequestPasswordReset.tsx
+          ResetPassword.tsx
+          Profile.tsx
+        /listings
+          Browse.tsx
+          ListingDetail.tsx
+          CreateListing.tsx
+          EditListing.tsx
+          MyListings.tsx
+        /messages
+          Inbox.tsx
+          Thread.tsx
+        /swaps
+          NewSwapRequest.tsx
+          MySwaps.tsx
+        /billing
+          Upgrade.tsx          # (implement per spec below)
+          Success.tsx
+          Cancel.tsx
+          Manage.tsx
+        /admin
+          Dashboard.tsx
+          Users.tsx
+          Listings.tsx
+      /styles
+        tailwind.css
+        theme.css
+    tailwind.config.js
+  .env.example
+  README.md
+  .replit or replit.nix (start frontend & backend)
+
+3) Data Model (SQLAlchemy)
+
+User
+
+id, email (unique), password_hash, name, phone, country, bio, avatar_url, is_verified, role ('user'|'admin'), created_at, updated_at
+
+Billing: stripe_customer_id, stripe_subscription_id, subscription_status ('none'|'active'|'past_due'|'canceled'|'incomplete'|'trialing'), subscription_current_period_end (datetime)
+
+Property is_subscriber → subscription_status in ('active','trialing').
+
+Listing
+
+id, owner_id, title, description, type ('caravan'|'cabin'), capacity, latitude, longitude, address, city, country
+
+amenities (JSON), house_rules (text), preferred_swap_notes (text), is_active (bool), created_at, updated_at
+
+Relation to Photo.
+
+Photo
+
+id, listing_id, filename, url, position.
+
+Availability (per-day)
+
+id, listing_id, date, is_available (bool)
+Simple policy: explicit rows store availability states; document behavior.
+
+Message
+
+id, sender_id, receiver_id, listing_id (nullable), thread_id (uuid/str), body, created_at, read_at.
+
+Swap
+
+id, requester_id, requested_user_id, requester_listing_id, requested_listing_id, start_date, end_date, status('pending'|'accepted'|'declined'|'cancelled'), notes, created_at, updated_at.
+
+Create Alembic migrations.
+
+4) Environment Variables (.env.example)
+# App
+FLASK_ENV=development
+JWT_SECRET=
+CSRF_SECRET=
+FRONTEND_URL=http://localhost:5173
+BACKEND_URL=http://localhost:5000
+
+# Mail (verification/reset)
+MAIL_SERVER=
+MAIL_PORT=
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_USE_TLS=true
+MAIL_DEFAULT_SENDER="NestSwap <no-reply@nestswap>"
+
+# Stripe (Subscriptions)
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_ID=           # recurring £10/year price id
+STRIPE_SUCCESS_URL=http://localhost:5173/#/billing/success
+STRIPE_CANCEL_URL=http://localhost:5173/#/billing/cancel
+STRIPE_BILLING_PORTAL_RETURN_URL=http://localhost:5173/#/billing/manage
+
+5) Backend API (Flask Blueprints)
+
+Common
+
+GET /api/health → {status:'ok'}.
+
+Auth
+
+POST /api/auth/register (email, password, name) → send verification email.
+
+POST /api/auth/verify (token).
+
+POST /api/auth/login → set HttpOnly cookies (access+refresh).
+
+POST /api/auth/refresh, POST /api/auth/logout.
+
+POST /api/auth/request-password-reset, POST /api/auth/reset-password.
+
+GET /api/auth/me → current profile incl. subscription_status.
+
+Users
+
+GET/PUT /api/users/me (profile, avatar upload).
+
+Listings
+
+POST /api/listings (auth; multipart photo upload).
+
+GET /api/listings with filters: q, type, guests>=, amenities[], lat, lng, radius_km, start_date, end_date.
+
+GET /api/listings/:id, PUT /api/listings/:id, DELETE /api/listings/:id.
+
+GET /api/listings/:id/availability?month=YYYY-MM (per-day).
+
+PUT /api/listings/:id/availability (array of {date, is_available}).
+
+Messages
+
+Threads list, thread read, post message (create thread implicitly on first message).
+
+Swaps (subscription-gated)
+
+POST /api/swaps → requires active/trialing membership; else return HTTP 402 {error:'Subscription required', code:'SUB_REQUIRED'}.
+
+GET /api/swaps/mine, PUT /api/swaps/:id/status (accepted|declined|cancelled).
+
+Admin (role=admin)
+
+Overview counts, set user role, moderate listings (activate/deactivate).
+
+Billing (Stripe)
+
+POST /api/billing/checkout-session (JWT) → create subscription Checkout for STRIPE_PRICE_ID, return {url}.
+
+POST /api/billing/portal-session (JWT) → Stripe Billing Portal {url}.
+
+POST /api/billing/webhook (no auth) → handle:
+
+customer.subscription.created|updated|deleted
+
+invoice.payment_succeeded|failed
+
+Update user: stripe_subscription_id, subscription_status, subscription_current_period_end.
+
+Verify webhook signature with STRIPE_WEBHOOK_SECRET.
+
+Security & Middleware
+
+Hash with Argon2 (fallback: bcrypt).
+
+JWT cookies: HttpOnly, SameSite=Lax; CSRF via XSRF-TOKEN cookie + X-CSRF-Token header.
+
+Rate limits: /api/auth/* (e.g., 5/min/IP); /api/uploads (10/min).
+
+CORS: allow only FRONTEND_URL, credentials=true.
+
+Sanitize rich text (descriptions/messages) with bleach.
+
+File uploads: verify MIME and size; store UUID filenames under /static/uploads.
+
+Decorator
+
+Implement @subscription_required and apply to swap-creation (and any other gated endpoints).
+
+6) Frontend (React) – Pages & UX
+
+Routing & State
+
+React Router + guarded routes (ProtectedRoute).
+
+React Query for API calls and caching. Maintain current user via /api/auth/me.
+
+Browse/Map
+
+Filters (keyword, type caravan/cabin, guests, amenities, date range).
+
+Leaflet map with clustered markers; preview on click; link to details.
+
+Listing Details
+
+Photo gallery, amenities, rules, per-day availability calendar; actions: “Message owner”, “Request swap” (paywalled if not subscribed).
+
+Create/Edit Listing
+
+Multi-step: drag-drop images, map pin or address search, amenities checklist, availability editor (per day).
+
+Messages
+
+Two-pane inbox & thread.
+
+Swaps
+
+Create new request (subscriber only), list & manage statuses.
+
+Admin
+
+Simple dashboard: counts, user/listing tables, moderation.
+
+Branding
+
+Tailwind tokens:
+
+--ns-green: #2f5d50 (mountain green)
+
+--ns-blue: #2b6cb0
+
+--ns-earth: #8a7a5b
+
+--ns-ink: #0f172a
+
+Rounded-2xl cards, soft shadows, focus states, WCAG-AA contrast.
+
+7) Billing UI (implement these files verbatim)
+
+Create these exact files with the described logic and copy:
+
+frontend/src/api/billing.ts
+
+Implement two helpers using fetch with credentials: 'include' and VITE_API base URL:
+
+createCheckout(): Promise<string> → POST /api/billing/checkout-session → returns redirect URL.
+
+openBillingPortal(): Promise<string> → POST /api/billing/portal-session → returns redirect URL.
+
+Throw a clear Error if the response is not ok or URL missing.
+
+frontend/src/components/PaywallModal.tsx
+
+Modal that explains the membership and offers:
+
+Primary CTA: “Upgrade for £10/year” → calls createCheckout() and redirects to Stripe.
+
+Secondary CTA: “Not now” → closes modal.
+
+Include bullet points: unlimited swap requests while active; in-app messaging; cancel anytime.
+
+Show inline error box on failure.
+
+frontend/src/features/billing/Upgrade.tsx
+
+Hero + value bullets + FAQ + sticky pricing card.
+
+Primary button: “Upgrade for £10/year” → createCheckout() redirect.
+
+Secondary: “Manage billing” → openBillingPortal() redirect.
+
+Copy:
+
+Title: “Unlock swaps with NestSwap Membership”
+
+Subtitle: “Request and confirm property swaps, access owner messaging, and join a trusted community—for just £10/year.”
+
+Small print: auto-renewal, cancel anytime, Stripe security, no hidden fees.
+
+Paywall usage example
+
+In the Request Swap CTA (e.g., ListingDetail), if me.subscription_status not in ['active','trialing'], open PaywallModal; otherwise continue.
+
+8) Stripe Integration (backend)
+
+Install stripe Python SDK.
+
+On checkout: mode='subscription', line_items=[{price: STRIPE_PRICE_ID, quantity: 1}], allow_promotion_codes=true, success_url/cancel_url from env.
+
+Create/attach a Stripe Customer per user (store stripe_customer_id).
+
+Webhook: verify signature; update user billing fields and period end timestamp.
+
+Provide a billing portal endpoint for self-service cancel/manage.
+
+9) Search & Map
+
+Simple full-text LIKE for q.
+
+Haversine distance filter for lat,lng,radius_km.
+
+Leaflet with OSM tiles; cluster markers if >25.
+
+10) Seeding
+
+Script creates:
+
+5 verified users (one with subscription_status='active'),
+
+8–12 listings with photos, amenities, and availability across locations,
+
+a couple of threads and swap requests in various statuses.
+
+11) Tests (pytest)
+
+test_auth.py: register → verify → login → refresh → logout → reset password.
+
+test_listings.py: create listing (auth) → upload photo → search → edit → delete.
+
+test_swaps.py: create swap (subscriber) → change status; permissions.
+
+test_billing_gate.py:
+
+Non-subscriber POST /api/swaps → 402 with {code:'SUB_REQUIRED'}.
+
+Subscriber (mock webhook or set status) → 201 success.
+
+Checkout endpoint returns URL (mock Stripe).
+
+12) Security & Quality
+
+Password hashing with argon2 (fallback bcrypt).
+
+CSRF (double-submit token: XSRF-TOKEN cookie echoed in X-CSRF-Token).
+
+Rate limiting on auth/uploads; robust input validation; sanitized rendering.
+
+Role guard for admin.
+
+Linting config (Black/Ruff or Flake8) and preconfigured pytest runner.
+
+13) One-Click Run & Docs
+
+Start both servers with one click in Replit (.replit or replit.nix), frontend on 5173, backend on 5000.
+
+README.md must include:
+
+Setup steps; .env.example with all keys; how to create Stripe Product/Price and set webhook URL.
+
+How to run Alembic migrations, seed script, and tests.
+
+Security notes (JWT cookies + CSRF), upload limits, billing notes.
+
+Admin bootstrap instructions.
+
+14) Definition of Done (acceptance)
+
+Register → receive verification (or console log) → verify → login.
+
+Create listing with photos & per-day availability.
+
+Browse/search + map markers work.
+
+Message owner.
+
+Non-subscriber clicking “Request swap” sees Paywall → Upgrade → Stripe Checkout → Success → webhook marks user active → swap creation allowed.
+
+Manage billing opens Stripe portal.
+
+Admin can view users + subscription status and moderate listings.
+
+Seeds & tests pass; no secrets committed; helpful UI toasts; accessible focus states.
+
+Generate the complete codebase accordingly.
