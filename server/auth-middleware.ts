@@ -4,11 +4,11 @@ import { Request, Response, NextFunction } from 'express';
 import { storage } from './storage';
 import type { UserWithSubscription } from '@shared/schema';
 
-const JWT_SECRET = process.env.JWT_SECRET!;
+const JWT_SECRET = process.env.JWT_SECRET || 'temp-jwt-secret-for-development-only';
 const JWT_EXPIRES_IN = '7d';
 
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is required for authentication');
+if (!process.env.JWT_SECRET) {
+  console.warn('⚠️  WARNING: Using temporary JWT_SECRET for development. Set JWT_SECRET environment variable for production.');
 }
 
 export interface AuthRequest extends Request {

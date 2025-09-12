@@ -55,19 +55,15 @@ export interface IStorage {
   getListingsByOwner(ownerId: string): Promise<ListingWithPhotos[]>;
   updateListing(id: string, updates: Partial<Listing>): Promise<Listing>;
   deleteListing(id: string): Promise<void>;
-  searchListings(filters: {
-    query?: string;
-    type?: "caravan" | "cabin";
-    minCapacity?: number;
-    amenities?: string[];
-    latitude?: number;
-    longitude?: number;
-    radiusKm?: number;
-    startDate?: Date;
-    endDate?: Date;
-    limit?: number;
-    offset?: number;
-  }): Promise<ListingWithPhotos[]>;
+  searchListings(
+    filters: any,
+    coordinates?: { lat: number; lng: number },
+    radiusKm?: number,
+    sortBy?: string,
+    page?: number,
+    limit?: number,
+    amenities?: string[]
+  ): Promise<ListingWithPhotos[]>;
   
   // Photo operations
   addPhotosToListing(listingId: string, photos: Omit<InsertPhoto, 'listingId'>[]): Promise<Photo[]>;
@@ -227,49 +223,79 @@ export class PostgresStorage implements IStorage {
     await db.delete(listings).where(eq(listings.id, id));
   }
 
-  async searchListings(filters: {
-    query?: string;
-    type?: "caravan" | "cabin";
-    minCapacity?: number;
-    amenities?: string[];
-    latitude?: number;
-    longitude?: number;
-    radiusKm?: number;
-    startDate?: Date;
-    endDate?: Date;
-    limit?: number;
-    offset?: number;
-  }): Promise<ListingWithPhotos[]> {
-    let query = db.select().from(listings).where(eq(listings.isActive, true));
-
+  async searchListings(
+    filters: any,
+    coordinates?: { lat: number; lng: number },
+    radiusKm?: number,
+    sortBy?: string,
+    page?: number,
+    limit?: number,
+    amenities?: string[]
+  ): Promise<ListingWithPhotos[]> {
     const conditions = [eq(listings.isActive, true)];
 
-    if (filters.query) {
-      conditions.push(
-        sql`(${listings.title} ILIKE ${`%${filters.query}%`} OR ${listings.description} ILIKE ${`%${filters.query}%`} OR ${listings.city} ILIKE ${`%${filters.query}%`})`
-      );
-    }
-
+    // Handle type filter
     if (filters.type) {
       conditions.push(eq(listings.type, filters.type));
     }
 
-    if (filters.minCapacity) {
-      conditions.push(gte(listings.capacity, filters.minCapacity));
+    // Handle guest filter (using maxGuests instead of capacity)
+    if (filters.maxGuests?.gte) {
+      conditions.push(gte(listings.maxGuests, filters.maxGuests.gte));
     }
 
-    if (filters.latitude && filters.longitude && filters.radiusKm) {
-      // Haversine distance formula
+    // Handle bedroom filter
+    if (filters.bedrooms?.gte) {
+      conditions.push(gte(listings.bedrooms, filters.bedrooms.gte));
+    }
+
+    // Handle bathroom filter
+    if (filters.bathrooms?.gte) {
+      conditions.push(gte(listings.bathrooms, filters.bathrooms.gte));
+    }
+
+    // Handle price filters
+    if (filters.pricePerNight?.gte) {
+      conditions.push(gte(listings.pricePerNight, filters.pricePerNight.gte.toString()));
+    }
+    if (filters.pricePerNight?.lte) {
+      conditions.push(lte(listings.pricePerNight, filters.pricePerNight.lte.toString()));
+    }
+
+    // Handle location-based search
+    if (coordinates && radiusKm) {
       conditions.push(
-        sql`(6371 * acos(cos(radians(${filters.latitude})) * cos(radians(${listings.latitude})) * cos(radians(${listings.longitude}) - radians(${filters.longitude})) + sin(radians(${filters.latitude})) * sin(radians(${listings.latitude})))) <= ${filters.radiusKm}`
+        sql`(6371 * acos(cos(radians(${coordinates.lat})) * cos(radians(${listings.latitude})) * cos(radians(${listings.longitude}) - radians(${coordinates.lng})) + sin(radians(${coordinates.lat})) * sin(radians(${listings.latitude})))) <= ${radiusKm}`
       );
+    }
+
+    // Handle amenities filter
+    if (amenities && amenities.length > 0) {
+      conditions.push(
+        sql`${listings.amenities} @> ${JSON.stringify(amenities)}`
+      );
+    }
+
+    // Set ordering
+    let orderBy;
+    switch (sortBy) {
+      case 'price_low':
+        orderBy = asc(listings.pricePerNight);
+        break;
+      case 'price_high':
+        orderBy = desc(listings.pricePerNight);
+        break;
+      case 'newest':
+      default:
+        orderBy = desc(listings.createdAt);
+        break;
     }
 
     const foundListings = await db.select().from(listings)
       .where(and(...conditions))
-      .orderBy(desc(listings.createdAt))
-      .limit(filters.limit || 50)
-      .offset(filters.offset || 0);
+      .orderBy(orderBy)
+      .limit(limit || 20)
+      .offset(((page || 1) - 1) * (limit || 20));
 
     const results: ListingWithPhotos[] = [];
     for (const listing of foundListings) {

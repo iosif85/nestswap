@@ -322,16 +322,389 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // Placeholder routes for other features
+  // Listings routes
   app.get('/api/listings', async (req: express.Request, res: express.Response) => {
-    // TODO: Implement listings search
-    res.json({ message: 'Listings endpoint - to be implemented' });
+    try {
+      const { 
+        lat, 
+        lng, 
+        radius = 50, 
+        type, 
+        guests, 
+        bedrooms, 
+        bathrooms,
+        amenities,
+        minPrice,
+        maxPrice,
+        sortBy = 'newest',
+        page = 1,
+        limit = 20 
+      } = req.query;
+
+      const filters: any = {};
+      
+      if (type) filters.type = type;
+      if (guests) filters.maxGuests = { gte: parseInt(guests as string) };
+      if (bedrooms) filters.bedrooms = { gte: parseInt(bedrooms as string) };
+      if (bathrooms) filters.bathrooms = { gte: parseInt(bathrooms as string) };
+      if (minPrice) filters.pricePerNight = { gte: parseInt(minPrice as string) };
+      if (maxPrice) filters.pricePerNight = { lte: parseInt(maxPrice as string) };
+
+      let coordinates: { lat: number; lng: number } | undefined;
+      if (lat && lng) {
+        coordinates = {
+          lat: parseFloat(lat as string),
+          lng: parseFloat(lng as string)
+        };
+      }
+
+      const listings = await storage.searchListings(
+        filters,
+        coordinates,
+        parseInt(radius as string),
+        sortBy as string,
+        parseInt(page as string),
+        parseInt(limit as string),
+        amenities ? (amenities as string).split(',') : undefined
+      );
+
+      res.json(listings);
+    } catch (error) {
+      console.error('Search listings error:', error);
+      res.status(500).json({ error: 'Failed to search listings' });
+    }
   });
 
-  app.post('/api/listings', authenticateToken, async (req: AuthRequest, res) => {
-    // TODO: Implement create listing
-    res.json({ message: 'Create listing endpoint - to be implemented' });
+  app.get('/api/listings/:id', async (req: express.Request, res: express.Response) => {
+    try {
+      const listing = await storage.getListingById(req.params.id);
+      if (!listing) {
+        return res.status(404).json({ error: 'Listing not found' });
+      }
+      res.json(listing);
+    } catch (error) {
+      console.error('Get listing error:', error);
+      res.status(500).json({ error: 'Failed to get listing' });
+    }
   });
+
+  app.post('/api/listings', 
+    authenticateToken,
+    [
+      body('title').trim().isLength({ min: 5, max: 100 }),
+      body('description').trim().isLength({ min: 20, max: 2000 }),
+      body('type').isIn(['caravan', 'cabin', 'motorhome', 'tent', 'other']),
+      body('address').trim().isLength({ min: 5, max: 200 }),
+      body('city').optional().trim().isLength({ min: 1, max: 100 }),
+      body('country').optional().trim().isLength({ min: 1, max: 100 }),
+      body('latitude').isFloat({ min: -90, max: 90 }),
+      body('longitude').isFloat({ min: -180, max: 180 }),
+      body('maxGuests').isInt({ min: 1, max: 50 }),
+      body('bedrooms').isInt({ min: 0, max: 20 }),
+      body('bathrooms').isInt({ min: 0, max: 10 }),
+      body('pricePerNight').isFloat({ min: 0 }),
+      body('amenities').optional().isArray(),
+      body('photos').optional().isArray(),
+      body('houseRules').optional().trim().isLength({ max: 1000 }),
+    ],
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+        }
+
+        if (!req.user) {
+          return res.status(401).json({ error: 'Not authenticated' });
+        }
+
+        const {
+          title,
+          description,
+          type,
+          address,
+          city,
+          country,
+          latitude,
+          longitude,
+          maxGuests,
+          bedrooms,
+          bathrooms,
+          pricePerNight,
+          amenities,
+          photos,
+          houseRules
+        } = req.body;
+
+        const listingData = {
+          ownerId: req.user.id,
+          title,
+          description,
+          type,
+          address,
+          city: city || address.split(',')[1]?.trim() || 'Unknown',
+          country: country || 'UK',
+          latitude: latitude.toString(),
+          longitude: longitude.toString(),
+          maxGuests,
+          bedrooms,
+          bathrooms,
+          pricePerNight: pricePerNight.toString(),
+          amenities: amenities || [],
+          houseRules: houseRules || null,
+        };
+
+        const listing = await storage.createListing(listingData);
+
+        // Add photos if provided
+        if (photos && photos.length > 0) {
+          await storage.addPhotosToListing(listing.id, photos.map((photo: any, index: number) => ({
+            filename: photo.filename || `photo-${index}.jpg`,
+            url: photo.url,
+            position: index,
+          })));
+        }
+
+        const listingWithPhotos = await storage.getListingById(listing.id);
+        res.status(201).json(listingWithPhotos);
+      } catch (error) {
+        console.error('Create listing error:', error);
+        res.status(500).json({ error: 'Failed to create listing' });
+      }
+    }
+  );
+
+  app.put('/api/listings/:id',
+    authenticateToken,
+    [
+      body('title').optional().trim().isLength({ min: 5, max: 100 }),
+      body('description').optional().trim().isLength({ min: 20, max: 2000 }),
+      body('type').optional().isIn(['caravan', 'cabin', 'motorhome', 'tent', 'other']),
+      body('address').optional().trim().isLength({ min: 5, max: 200 }),
+      body('latitude').optional().isFloat({ min: -90, max: 90 }),
+      body('longitude').optional().isFloat({ min: -180, max: 180 }),
+      body('maxGuests').optional().isInt({ min: 1, max: 50 }),
+      body('bedrooms').optional().isInt({ min: 0, max: 20 }),
+      body('bathrooms').optional().isInt({ min: 0, max: 10 }),
+      body('pricePerNight').optional().isFloat({ min: 0 }),
+      body('amenities').optional().isArray(),
+      body('isActive').optional().isBoolean(),
+    ],
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+        }
+
+        if (!req.user) {
+          return res.status(401).json({ error: 'Not authenticated' });
+        }
+
+        const listing = await storage.getListingById(req.params.id);
+        if (!listing) {
+          return res.status(404).json({ error: 'Listing not found' });
+        }
+
+        if (listing.ownerId !== req.user.id && req.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Not authorized to edit this listing' });
+        }
+
+        const updates: any = {};
+        const allowedFields = [
+          'title', 'description', 'type', 'address', 'city', 'country', 'latitude', 'longitude',
+          'maxGuests', 'bedrooms', 'bathrooms', 'pricePerNight', 'amenities', 'houseRules', 'isActive'
+        ];
+
+        allowedFields.forEach(field => {
+          if (req.body[field] !== undefined) {
+            updates[field] = req.body[field];
+          }
+        });
+
+        const updatedListing = await storage.updateListing(req.params.id, updates);
+        res.json(updatedListing);
+      } catch (error) {
+        console.error('Update listing error:', error);
+        res.status(500).json({ error: 'Failed to update listing' });
+      }
+    }
+  );
+
+  app.delete('/api/listings/:id', authenticateToken, async (req: AuthRequest, res: express.Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      const listing = await storage.getListingById(req.params.id);
+      if (!listing) {
+        return res.status(404).json({ error: 'Listing not found' });
+      }
+
+      if (listing.ownerId !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Not authorized to delete this listing' });
+      }
+
+      await storage.deleteListing(req.params.id);
+      res.json({ message: 'Listing deleted successfully' });
+    } catch (error) {
+      console.error('Delete listing error:', error);
+      res.status(500).json({ error: 'Failed to delete listing' });
+    }
+  });
+
+  // Get user's own listings
+  app.get('/api/users/me/listings', authenticateToken, async (req: AuthRequest, res: express.Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      const listings = await storage.getListingsByOwner(req.user.id);
+      res.json(listings);
+    } catch (error) {
+      console.error('Get user listings error:', error);
+      res.status(500).json({ error: 'Failed to get user listings' });
+    }
+  });
+
+  // Photo management routes
+  app.post('/api/listings/:id/photos',
+    authenticateToken,
+    [
+      body('url').isURL(),
+      body('caption').optional().isLength({ max: 200 }),
+      body('sortOrder').optional().isInt({ min: 0 }),
+    ],
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+        }
+
+        if (!req.user) {
+          return res.status(401).json({ error: 'Not authenticated' });
+        }
+
+        const listing = await storage.getListingById(req.params.id);
+        if (!listing) {
+          return res.status(404).json({ error: 'Listing not found' });
+        }
+
+        if (listing.ownerId !== req.user.id && req.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Not authorized to manage photos for this listing' });
+        }
+
+        const { url, caption, sortOrder } = req.body;
+        const photo = await storage.addPhoto({
+          listingId: req.params.id,
+          url,
+          caption: caption || null,
+          sortOrder: sortOrder || 0,
+        });
+
+        res.status(201).json(photo);
+      } catch (error) {
+        console.error('Add photo error:', error);
+        res.status(500).json({ error: 'Failed to add photo' });
+      }
+    }
+  );
+
+  app.delete('/api/photos/:id', authenticateToken, async (req: AuthRequest, res: express.Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      const photo = await storage.getPhotoById(req.params.id);
+      if (!photo) {
+        return res.status(404).json({ error: 'Photo not found' });
+      }
+
+      const listing = await storage.getListingById(photo.listingId);
+      if (!listing) {
+        return res.status(404).json({ error: 'Listing not found' });
+      }
+
+      if (listing.ownerId !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Not authorized to delete this photo' });
+      }
+
+      await storage.deletePhoto(req.params.id);
+      res.json({ message: 'Photo deleted successfully' });
+    } catch (error) {
+      console.error('Delete photo error:', error);
+      res.status(500).json({ error: 'Failed to delete photo' });
+    }
+  });
+
+  // Availability management routes
+  app.get('/api/listings/:id/availability', async (req: express.Request, res: express.Response) => {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: 'Start date and end date are required' });
+      }
+
+      const availability = await storage.getAvailability(
+        req.params.id,
+        new Date(startDate as string),
+        new Date(endDate as string)
+      );
+
+      res.json(availability);
+    } catch (error) {
+      console.error('Get availability error:', error);
+      res.status(500).json({ error: 'Failed to get availability' });
+    }
+  });
+
+  app.post('/api/listings/:id/availability',
+    authenticateToken,
+    [
+      body('date').isDate(),
+      body('isAvailable').isBoolean(),
+      body('priceOverride').optional().isFloat({ min: 0 }),
+    ],
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+        }
+
+        if (!req.user) {
+          return res.status(401).json({ error: 'Not authenticated' });
+        }
+
+        const listing = await storage.getListingById(req.params.id);
+        if (!listing) {
+          return res.status(404).json({ error: 'Listing not found' });
+        }
+
+        if (listing.ownerId !== req.user.id && req.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Not authorized to manage availability for this listing' });
+        }
+
+        const { date, isAvailable, priceOverride } = req.body;
+        const availability = await storage.setAvailability({
+          listingId: req.params.id,
+          date: new Date(date),
+          isAvailable,
+          priceOverride: priceOverride || null,
+        });
+
+        res.status(201).json(availability);
+      } catch (error) {
+        console.error('Set availability error:', error);
+        res.status(500).json({ error: 'Failed to set availability' });
+      }
+    }
+  );
 
   app.post('/api/swaps', authenticateToken, requireSubscription, async (req: AuthRequest, res) => {
     // TODO: Implement swap creation (subscription required)

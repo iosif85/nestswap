@@ -6,7 +6,7 @@ import { relations } from "drizzle-orm";
 
 // Enums
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
-export const propertyTypeEnum = pgEnum("property_type", ["caravan", "cabin"]);
+export const propertyTypeEnum = pgEnum("property_type", ["caravan", "cabin", "motorhome", "tent", "other"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "none", "active", "past_due", "canceled", "incomplete", "trialing"
 ]);
@@ -44,7 +44,10 @@ export const listings = pgTable("listings", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   type: propertyTypeEnum("type").notNull(),
-  capacity: integer("capacity").notNull(),
+  maxGuests: integer("max_guests").notNull(),
+  bedrooms: integer("bedrooms").notNull(),
+  bathrooms: integer("bathrooms").notNull(),
+  pricePerNight: decimal("price_per_night", { precision: 10, scale: 2 }).notNull(),
   latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
   longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
   address: text("address").notNull(),
@@ -200,7 +203,10 @@ export const insertUserSchema = createInsertSchema(users, {
 export const insertListingSchema = createInsertSchema(listings, {
   title: z.string().min(1).max(200),
   description: z.string().min(1).max(2000),
-  capacity: z.number().int().min(1).max(20),
+  maxGuests: z.number().int().min(1).max(50),
+  bedrooms: z.number().int().min(0).max(20),
+  bathrooms: z.number().int().min(0).max(10),
+  pricePerNight: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0),
   latitude: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= -90 && Number(val) <= 90),
   longitude: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= -180 && Number(val) <= 180),
   address: z.string().min(1).max(300),
