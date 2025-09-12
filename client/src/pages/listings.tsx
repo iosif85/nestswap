@@ -19,7 +19,23 @@ interface SearchFiltersState {
   bathrooms: string;
   minPrice: string;
   maxPrice: string;
+  checkIn: string;
+  checkOut: string;
   amenities: string[];
+  sortBy: string;
+}
+
+interface ListingResponse {
+  listings: any[];
+  metadata: {
+    page: number;
+    limit: number;
+    total: number;
+    hasCoordinates: boolean;
+    searchRadius: number | null;
+    sortBy: string;
+    appliedFilters: number;
+  };
 }
 
 export default function ListingsPage() {
@@ -33,15 +49,21 @@ export default function ListingsPage() {
     bathrooms: '',
     minPrice: '',
     maxPrice: '',
+    checkIn: '',
+    checkOut: '',
     amenities: [],
+    sortBy: 'newest',
   });
 
-  const { data: listings, isLoading, error } = useQuery({
-    queryKey: ['/api/listings', filters],
+  const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
+  const [loadingLocation, setLoadingLocation] = useState(false);
+
+  const { data: response, isLoading, error } = useQuery({
+    queryKey: ['/api/listings', filters, userLocation],
     queryFn: async () => {
       const params = new URLSearchParams();
       
-      // Add non-empty filters to URL params
+      // Add all filters to URL params
       Object.entries(filters).forEach(([key, value]) => {
         if (value && value !== '') {
           if (key === 'amenities' && Array.isArray(value)) {
@@ -54,16 +76,65 @@ export default function ListingsPage() {
         }
       });
 
+      // Add user location for distance-based sorting if available
+      if (userLocation) {
+        params.append('lat', userLocation.lat.toString());
+        params.append('lng', userLocation.lng.toString());
+        params.append('radius', '50'); // Default 50km radius
+      }
+
+      console.log('Fetching listings with params:', params.toString());
+      
       const response = await fetch(`/api/listings?${params}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch listings');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
-      return response.json();
+      return response.json() as Promise<ListingResponse>;
     },
   });
 
+  // Extract listings and metadata from response
+  const listings = response?.listings || [];
+  const metadata = response?.metadata || null;
+
   const handleFilterChange = (newFilters: Partial<SearchFiltersState>) => {
+    console.log('Filter change:', newFilters);
     setFilters(prev => ({ ...prev, ...newFilters }));
+  };
+
+  const handleSortChange = (sortBy: string) => {
+    setFilters(prev => ({ ...prev, sortBy }));
+  };
+
+  const getUserLocation = async () => {
+    if (!navigator.geolocation) {
+      console.log('Geolocation not supported');
+      return;
+    }
+
+    setLoadingLocation(true);
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          reject,
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+        );
+      });
+      
+      const location = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+      };
+      
+      setUserLocation(location);
+      console.log('User location obtained:', location);
+    } catch (error) {
+      console.error('Error getting location:', error);
+    } finally {
+      setLoadingLocation(false);
+    }
   };
 
   const resetFilters = () => {
@@ -75,7 +146,10 @@ export default function ListingsPage() {
       bathrooms: '',
       minPrice: '',
       maxPrice: '',
+      checkIn: '',
+      checkOut: '',
       amenities: [],
+      sortBy: 'newest',
     });
   };
 
@@ -89,7 +163,7 @@ export default function ListingsPage() {
             </CardHeader>
             <CardContent>
               <p className="text-center text-muted-foreground">
-                We couldn't load the listings. Please try again later.
+                {error instanceof Error ? error.message : 'We couldn\'t load the listings. Please try again later.'}
               </p>
             </CardContent>
             <CardFooter className="justify-center">
@@ -118,12 +192,27 @@ export default function ListingsPage() {
             
             <div className="flex items-center gap-2">
               <Button
+                variant="outline"
+                onClick={getUserLocation}
+                disabled={loadingLocation}
+                data-testid="button-get-location"
+              >
+                <MapPin className="h-4 w-4 mr-2" />
+                {loadingLocation ? 'Getting location...' : 'Use my location'}
+              </Button>
+              
+              <Button
                 variant={showFilters ? "default" : "outline"}
                 onClick={() => setShowFilters(!showFilters)}
                 data-testid="button-toggle-filters"
               >
                 <Filter className="h-4 w-4 mr-2" />
                 Filters
+                {metadata && metadata.appliedFilters > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {metadata.appliedFilters}
+                  </Badge>
+                )}
               </Button>
               
               <div className="flex rounded-lg border">
@@ -149,11 +238,26 @@ export default function ListingsPage() {
 
           {/* Search Filters */}
           {showFilters && (
-            <div className="mt-6 p-4 bg-muted rounded-lg">
+            <div className="mt-6">
               <SearchFilters
                 isOpen={true}
                 onFiltersChange={handleFilterChange}
+                initialFilters={filters}
               />
+            </div>
+          )}
+          
+          {/* Search Status */}
+          {metadata && (
+            <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
+              <span>{metadata.total} properties found</span>
+              {metadata.hasCoordinates && (
+                <span>📍 Within {metadata.searchRadius}km of your location</span>
+              )}
+              {metadata.appliedFilters > 0 && (
+                <span>🔍 {metadata.appliedFilters} filter{metadata.appliedFilters > 1 ? 's' : ''} applied</span>
+              )}
+              <span>📋 Sorted by {metadata.sortBy.replace('_', ' ')}</span>
             </div>
           )}
         </div>
@@ -164,16 +268,16 @@ export default function ListingsPage() {
         {view === 'map' ? (
           <div className="h-[600px] rounded-lg overflow-hidden border">
             <MapView 
-              properties={listings?.map((listing: any) => ({
+              properties={listings.map((listing: any) => ({
                 id: listing.id,
                 title: listing.title,
                 type: listing.type,
-                latitude: listing.latitude || 54.5, // Default to UK if missing
-                longitude: listing.longitude || -2,
+                latitude: parseFloat(listing.latitude) || 54.5,
+                longitude: parseFloat(listing.longitude) || -2,
                 price: `£${listing.pricePerNight}`,
                 rating: 4.5,
                 imageUrl: listing.photos?.[0]?.url || '/placeholder-image.jpg'
-              })) || []}
+              }))}
             />
           </div>
         ) : (
@@ -182,9 +286,9 @@ export default function ListingsPage() {
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">
-                  {isLoading ? 'Loading...' : `${listings?.length || 0} properties found`}
+                  {isLoading ? 'Loading...' : `${listings.length} properties found`}
                 </span>
-                {Object.values(filters).some(f => f && f !== '') && (
+                {Object.values(filters).some(f => f && f !== '' && (Array.isArray(f) ? f.length > 0 : true)) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -196,15 +300,21 @@ export default function ListingsPage() {
                 )}
               </div>
 
-              <Select defaultValue="newest">
+              <Select 
+                value={filters.sortBy} 
+                onValueChange={handleSortChange}
+              >
                 <SelectTrigger className="w-[180px]" data-testid="select-sort">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="newest">Newest first</SelectItem>
-                  <SelectItem value="price-low">Price: Low to High</SelectItem>
-                  <SelectItem value="price-high">Price: High to Low</SelectItem>
-                  <SelectItem value="rating">Highest rated</SelectItem>
+                  <SelectItem value="oldest">Oldest first</SelectItem>
+                  <SelectItem value="price_low">Price: Low to High</SelectItem>
+                  <SelectItem value="price_high">Price: High to Low</SelectItem>
+                  {userLocation && (
+                    <SelectItem value="distance">Distance</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -229,13 +339,13 @@ export default function ListingsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {listings?.map((listing: any) => (
+                {listings.map((listing: any) => (
                   <PropertyCard
                     key={listing.id}
                     id={listing.id}
                     title={listing.title}
                     type={listing.type}
-                    location={listing.address}
+                    location={`${listing.city}, ${listing.country}`}
                     price={`£${listing.pricePerNight}`}
                     rating={4.5} // TODO: Calculate from reviews
                     reviewCount={12} // TODO: Get from reviews
@@ -248,16 +358,22 @@ export default function ListingsPage() {
             )}
 
             {/* Empty State */}
-            {!isLoading && (!listings || listings.length === 0) && (
+            {!isLoading && listings.length === 0 && (
               <div className="text-center py-12">
                 <MapPin className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No listings found</h3>
                 <p className="text-muted-foreground mb-4">
-                  Try adjusting your search filters or location
+                  {metadata?.appliedFilters ? (
+                    'No properties match your current search criteria. Try adjusting your filters.'
+                  ) : (
+                    'No properties available at the moment. Please check back later.'
+                  )}
                 </p>
-                <Button onClick={resetFilters} data-testid="button-reset-search">
-                  Reset Search
-                </Button>
+                {metadata && metadata.appliedFilters > 0 && (
+                  <Button onClick={resetFilters} data-testid="button-reset-search">
+                    Reset Search
+                  </Button>
+                )}
               </div>
             )}
           </>
