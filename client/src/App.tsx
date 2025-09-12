@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { MessageSquare } from 'lucide-react';
 
 // Import components
 import Navigation from './components/Navigation';
@@ -26,6 +31,9 @@ import ListingsPage from './pages/listings';
 import CreateListingPage from './pages/create-listing';
 import SubscribePage from './pages/subscribe';
 import ListingDetailPage from './pages/listing-detail';
+
+// Import shared types
+import { User, Message, MessageWithSender, MessageThreadSummary } from '@shared/schema';
 
 // Import generated images
 import caravanImage from '@assets/generated_images/Modern_caravan_interior_design_28716383.png';
@@ -171,54 +179,193 @@ function BillingPage() {
 }
 
 function MessagesPage() {
-  // Mock message data //todo: remove mock functionality
-  const mockMessages = [
-    {
-      id: '1',
-      senderId: 'other-user',
-      senderName: 'Sarah Johnson',
-      content: 'Hi! I\'m interested in swapping with your mountain caravan. My cabin is available for the same dates.',
-      timestamp: '2024-01-15T10:30:00Z',
-      isRead: true,
-    },
-    {
-      id: '2',
-      senderId: 'current-user',
-      senderName: 'You',
-      content: 'That sounds great! I\'d love to see more photos of your cabin. What amenities does it have?',
-      timestamp: '2024-01-15T10:35:00Z',
-      isRead: true,
-    },
-    {
-      id: '3',
-      senderId: 'other-user',
-      senderName: 'Sarah Johnson',
-      content: 'It has a full kitchen, fireplace, hot tub, and amazing mountain views. I can send you more photos via email if you\'d like.',
-      timestamp: '2024-01-15T10:40:00Z',
-      isRead: true,
-    },
-  ];
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  const otherUser = {
-    id: 'other-user',
-    name: 'Sarah Johnson',
-    avatar: undefined,
-    isOnline: true,
+  // Get user info to know current user ID
+  const { data: user, isLoading: userLoading } = useQuery<User>({
+    queryKey: ['/api/auth/me'],
+  });
+
+  // Get message threads
+  const { data: threads = [], isLoading: threadsLoading } = useQuery<MessageThreadSummary[]>({
+    queryKey: ['/api/messages/threads'],
+    enabled: !!user,
+  });
+
+  // Get messages for selected thread
+  const { data: messages = [], isLoading: messagesLoading } = useQuery<MessageWithSender[]>({
+    queryKey: ['/api/messages/thread', selectedThreadId],
+    enabled: !!selectedThreadId,
+  });
+
+  // Send message mutation
+  const sendMessageMutation = useMutation<Message, Error, { threadId: string; receiverId: string; body: string }>({
+    mutationFn: async (vars) => {
+      return apiRequest<Message>('POST', '/api/messages', vars);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/messages/thread', selectedThreadId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/messages/threads'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to send message',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleSendMessage = async (content: string) => {
+    if (!selectedThreadId || !user) return;
+    
+    const currentThread = threads.find((t) => t.threadId === selectedThreadId);
+    if (!currentThread) return;
+
+    try {
+      await sendMessageMutation.mutateAsync({
+        threadId: selectedThreadId,
+        receiverId: currentThread.otherUser.id,
+        body: content,
+      });
+    } catch (error) {
+      console.error('Send message error:', error);
+    }
   };
 
+  if (userLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Please log in</h2>
+          <p className="text-muted-foreground mb-6">You need to be logged in to view messages</p>
+          <Button onClick={() => window.location.href = '/auth'}>
+            Log In
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-screen flex flex-col">
-      <div className="flex-1 max-w-4xl mx-auto w-full border-l border-r border-border">
-        <MessageThread
-          threadId="thread-1"
-          propertyTitle="Luxury Mountain Caravan"
-          propertyImage={caravanImage}
-          propertyLocation="Lake District, UK"
-          propertyRating={4.8}
-          otherUser={otherUser}
-          messages={mockMessages}
-          currentUserId="current-user"
-        />
+    <div className="h-screen flex">
+      {/* Thread List Sidebar */}
+      <div className="w-80 border-r border-border bg-muted/30">
+        <div className="p-4 border-b border-border">
+          <h1 className="text-xl font-semibold">Messages</h1>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto">
+          {threadsLoading ? (
+            <div className="p-4 text-center">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+              <p className="text-sm text-muted-foreground">Loading conversations...</p>
+            </div>
+          ) : threads.length === 0 ? (
+            <div className="p-4 text-center">
+              <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground text-sm">No conversations yet</p>
+              <p className="text-muted-foreground text-xs mt-2">Start messaging property owners from listings</p>
+            </div>
+          ) : (
+            threads.map((thread: any) => (
+              <div
+                key={thread.threadId}
+                className={`p-4 border-b border-border cursor-pointer hover-elevate ${
+                  selectedThreadId === thread.threadId ? 'bg-muted' : ''
+                }`}
+                onClick={() => setSelectedThreadId(thread.threadId)}
+                data-testid={`thread-${thread.threadId}`}
+              >
+                <div className="flex items-start space-x-3">
+                  <Avatar className="h-10 w-10 flex-shrink-0">
+                    <AvatarImage src={thread.otherUser.avatarUrl} />
+                    <AvatarFallback>{thread.otherUser.name.charAt(0).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-medium text-sm truncate">{thread.otherUser.name}</h3>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(thread.lastMessage.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground truncate mt-1">
+                      {thread.lastMessage.body}
+                    </p>
+                    {thread.unreadCount > 0 && (
+                      <Badge variant="default" className="mt-2 text-xs">
+                        {thread.unreadCount} new
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Message Thread View */}
+      <div className="flex-1 flex flex-col">
+        {!selectedThreadId ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <MessageSquare className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-xl font-semibold mb-2">Select a conversation</h2>
+              <p className="text-muted-foreground">Choose a conversation from the sidebar to start messaging</p>
+            </div>
+          </div>
+        ) : messagesLoading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading messages...</p>
+            </div>
+          </div>
+        ) : (
+          (() => {
+            const currentThread = threads.find((t) => t.threadId === selectedThreadId);
+            if (!currentThread) return null;
+
+            // Transform messages to match MessageThread component format
+            const transformedMessages = messages.map((msg: any) => ({
+              id: msg.id,
+              senderId: msg.senderId,
+              senderName: msg.sender?.name || 'Unknown',
+              senderAvatar: msg.sender?.avatarUrl,
+              content: msg.body,
+              timestamp: msg.createdAt,
+              isRead: !!msg.readAt,
+            }));
+
+            return (
+              <MessageThread
+                threadId={selectedThreadId}
+                otherUser={{
+                  id: currentThread.otherUser.id,
+                  name: currentThread.otherUser.name,
+                  avatar: currentThread.otherUser.avatarUrl,
+                  isOnline: false, // TODO: Implement online status
+                }}
+                messages={transformedMessages}
+                currentUserId={user.id}
+                onSendMessage={handleSendMessage}
+              />
+            );
+          })()
+        )}
       </div>
     </div>
   );

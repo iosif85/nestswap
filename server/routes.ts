@@ -1072,9 +1072,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ message: 'Create swap endpoint - to be implemented (requires subscription)' });
   });
 
-  app.get('/api/messages', authenticateToken, async (req: AuthRequest, res) => {
-    // TODO: Implement messages
-    res.json({ message: 'Messages endpoint - to be implemented' });
+  // Messaging routes
+  app.get('/api/messages/threads', authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const threads = await storage.getUserThreads(req.user.id);
+      res.json(threads);
+    } catch (error) {
+      console.error('Get threads error:', error);
+      res.status(500).json({ error: 'Failed to get message threads' });
+    }
+  });
+
+  app.get('/api/messages/thread/:threadId', authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const { threadId } = req.params;
+      const messages = await storage.getMessageThread(threadId);
+      
+      // Mark messages as read for the current user
+      await storage.markMessagesAsRead(threadId, req.user.id);
+      
+      res.json(messages);
+    } catch (error) {
+      console.error('Get thread messages error:', error);
+      res.status(500).json({ error: 'Failed to get thread messages' });
+    }
+  });
+
+  app.post('/api/messages', authenticateToken, requireSubscription, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const { receiverId, listingId, threadId, body } = req.body;
+      
+      if (!receiverId || !body) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Generate thread ID if not provided (format: userId1-userId2-listingId or userId1-userId2)
+      let finalThreadId = threadId;
+      if (!finalThreadId) {
+        const userIds = [req.user.id, receiverId].sort();
+        finalThreadId = listingId ? `${userIds[0]}-${userIds[1]}-${listingId}` : `${userIds[0]}-${userIds[1]}`;
+      }
+
+      const messageData = {
+        senderId: req.user.id,
+        receiverId,
+        listingId: listingId || null,
+        threadId: finalThreadId,
+        body: body.trim(),
+      };
+
+      const message = await storage.createMessage(messageData);
+      res.status(201).json(message);
+    } catch (error) {
+      console.error('Send message error:', error);
+      res.status(500).json({ error: 'Failed to send message' });
+    }
+  });
+
+  app.patch('/api/messages/thread/:threadId/read', authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const { threadId } = req.params;
+      await storage.markMessagesAsRead(threadId, req.user.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Mark messages as read error:', error);
+      res.status(500).json({ error: 'Failed to mark messages as read' });
+    }
   });
 
   // Admin routes

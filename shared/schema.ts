@@ -282,6 +282,13 @@ export type MessageWithSender = Message & {
   sender: Pick<User, 'id' | 'name' | 'avatarUrl'>;
 };
 
+export type MessageThreadSummary = {
+  threadId: string;
+  otherUser: Pick<User, 'id' | 'name' | 'avatarUrl'>;
+  lastMessage: Pick<Message, 'id' | 'body' | 'createdAt' | 'senderId' | 'receiverId' | 'readAt'>;
+  unreadCount: number;
+};
+
 export type SwapWithDetails = Swap & {
   requester: Pick<User, 'id' | 'name' | 'avatarUrl'>;
   requestedUser: Pick<User, 'id' | 'name' | 'avatarUrl'>;
