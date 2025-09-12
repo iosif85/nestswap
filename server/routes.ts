@@ -839,12 +839,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ error: 'Not authorized to manage photos for this listing' });
         }
 
-        const { url, caption, sortOrder } = req.body;
+        const { url, filename, position } = req.body;
         const photo = await storage.addPhoto({
           listingId: req.params.id,
           url,
-          caption: caption || null,
-          sortOrder: sortOrder || 0,
+          filename: filename || url.split('/').pop() || 'photo',
+          position: position || 0,
         });
 
         res.status(201).json(photo);
@@ -932,15 +932,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ error: 'Not authorized to manage availability for this listing' });
         }
 
-        const { date, isAvailable, priceOverride } = req.body;
-        const availability = await storage.setAvailability({
-          listingId: req.params.id,
+        const { date, isAvailable } = req.body;
+        await storage.setAvailability(req.params.id, [{
           date: new Date(date),
           isAvailable,
-          priceOverride: priceOverride || null,
-        });
+        }]);
 
-        res.status(201).json(availability);
+        res.status(201).json({ message: 'Availability set successfully' });
       } catch (error) {
         console.error('Set availability error:', error);
         res.status(500).json({ error: 'Failed to set availability' });
@@ -948,7 +946,128 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  app.post('/api/swaps', authenticateToken, requireSubscription, async (req: AuthRequest, res) => {
+  // Stripe subscription routes - Based on javascript_stripe blueprint
+  app.post('/api/create-subscription', 
+    authenticateToken,
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        if (!req.user) {
+          return res.status(401).json({ error: 'Not authenticated' });
+        }
+
+        // Check if user already has an active subscription
+        if (req.user.stripeSubscriptionId) {
+          // Return existing subscription details
+          const subscriptionStatus = req.user.subscriptionStatus;
+          if (subscriptionStatus === 'active' || subscriptionStatus === 'trialing') {
+            return res.json({
+              message: 'Already subscribed',
+              subscriptionStatus,
+              isSubscribed: true
+            });
+          }
+        }
+
+        // For development/testing without Stripe keys
+        if (!process.env.STRIPE_SECRET_KEY) {
+          // Mock subscription creation for development
+          await storage.updateUser(req.user.id, {
+            subscriptionStatus: 'active' as const,
+            stripeCustomerId: `mock_customer_${req.user.id}`,
+            stripeSubscriptionId: `mock_sub_${req.user.id}`,
+            subscriptionCurrentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year from now
+          });
+
+          return res.json({
+            message: 'Development subscription activated',
+            subscriptionStatus: 'active',
+            isSubscribed: true,
+            mockMode: true
+          });
+        }
+
+        // If Stripe keys are available, implement real Stripe logic
+        res.json({ 
+          message: 'Stripe subscription endpoint - requires Stripe keys to be configured',
+          requiresStripeKeys: true 
+        });
+      } catch (error) {
+        console.error('Create subscription error:', error);
+        res.status(500).json({ error: 'Failed to create subscription' });
+      }
+    }
+  );
+
+  app.post('/api/cancel-subscription',
+    authenticateToken,
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        if (!req.user) {
+          return res.status(401).json({ error: 'Not authenticated' });
+        }
+
+        if (!req.user.stripeSubscriptionId) {
+          return res.status(400).json({ error: 'No active subscription found' });
+        }
+
+        // For development/testing without Stripe keys
+        if (!process.env.STRIPE_SECRET_KEY) {
+          await storage.updateUser(req.user.id, {
+            subscriptionStatus: 'canceled' as const,
+            subscriptionCurrentPeriodEnd: new Date() // Immediate cancellation in dev
+          });
+
+          return res.json({
+            message: 'Development subscription canceled',
+            subscriptionStatus: 'canceled'
+          });
+        }
+
+        // If Stripe keys are available, implement real Stripe logic
+        res.json({ 
+          message: 'Stripe cancellation endpoint - requires Stripe keys to be configured',
+          requiresStripeKeys: true 
+        });
+      } catch (error) {
+        console.error('Cancel subscription error:', error);
+        res.status(500).json({ error: 'Failed to cancel subscription' });
+      }
+    }
+  );
+
+  app.get('/api/subscription-status',
+    authenticateToken,
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        if (!req.user) {
+          return res.status(401).json({ error: 'Not authenticated' });
+        }
+
+        const isSubscribed = req.user.subscriptionStatus === 'active' || req.user.subscriptionStatus === 'trialing';
+        
+        res.json({
+          subscriptionStatus: req.user.subscriptionStatus,
+          stripeCustomerId: req.user.stripeCustomerId,
+          stripeSubscriptionId: req.user.stripeSubscriptionId,
+          subscriptionCurrentPeriodEnd: req.user.subscriptionCurrentPeriodEnd,
+          isSubscribed,
+          yearlyPrice: '£10',
+          features: [
+            'Unlimited swap requests',
+            'Priority listing placement',
+            'Advanced search filters',
+            'Direct messaging with owners',
+            'Calendar integration'
+          ]
+        });
+      } catch (error) {
+        console.error('Get subscription status error:', error);
+        res.status(500).json({ error: 'Failed to get subscription status' });
+      }
+    }
+  );
+
+  app.post('/api/swaps', authenticateToken, requireSubscription, async (req: AuthRequest, res: express.Response) => {
     // TODO: Implement swap creation (subscription required)
     res.json({ message: 'Create swap endpoint - to be implemented (requires subscription)' });
   });

@@ -24,6 +24,7 @@ import ThemeToggle from './components/ThemeToggle';
 // Import pages
 import ListingsPage from './pages/listings';
 import CreateListingPage from './pages/create-listing';
+import SubscribePage from './pages/subscribe';
 import ListingDetailPage from './pages/listing-detail';
 
 // Import generated images
@@ -231,6 +232,7 @@ function Router() {
       <Route path="/listings/:id" component={ListingDetailPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/billing" component={BillingPage} />
+      <Route path="/subscribe" component={SubscribePage} />
       <Route path="/messages" component={MessagesPage} />
       <Route path="/create-listing" component={CreateListingPage} />
       <Route>
