@@ -200,9 +200,9 @@ function MessagesPage() {
   });
 
   // Send message mutation
-  const sendMessageMutation = useMutation<Message, Error, { threadId: string; receiverId: string; body: string }>({
-    mutationFn: async (vars) => {
-      return apiRequest<Message>('POST', '/api/messages', vars);
+  const sendMessageMutation = useMutation({
+    mutationFn: async (vars: { threadId: string; receiverId: string; body: string }) => {
+      return apiRequest('POST', '/api/messages', vars);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/messages/thread', selectedThreadId] });
@@ -356,7 +356,7 @@ function MessagesPage() {
                 otherUser={{
                   id: currentThread.otherUser.id,
                   name: currentThread.otherUser.name,
-                  avatar: currentThread.otherUser.avatarUrl,
+                  avatar: currentThread.otherUser.avatarUrl || undefined,
                   isOnline: false, // TODO: Implement online status
                 }}
                 messages={transformedMessages}
