@@ -21,6 +21,11 @@ import Footer from './components/Footer';
 import PaywallModal from './components/PaywallModal';
 import ThemeToggle from './components/ThemeToggle';
 
+// Import pages
+import ListingsPage from './pages/listings';
+import CreateListingPage from './pages/create-listing';
+import ListingDetailPage from './pages/listing-detail';
+
 // Import generated images
 import caravanImage from '@assets/generated_images/Modern_caravan_interior_design_28716383.png';
 import cabinImage from '@assets/generated_images/Rustic_cabin_exterior_view_d05e4235.png';
@@ -222,9 +227,12 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={HomePage} />
+      <Route path="/listings" component={ListingsPage} />
+      <Route path="/listings/:id" component={ListingDetailPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/billing" component={BillingPage} />
       <Route path="/messages" component={MessagesPage} />
+      <Route path="/create-listing" component={CreateListingPage} />
       <Route>
         {/* 404 page */}
         <div className="min-h-screen flex items-center justify-center">
