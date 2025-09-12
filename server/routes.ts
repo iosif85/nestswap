@@ -326,6 +326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/listings', async (req: express.Request, res: express.Response) => {
     try {
       const { 
+        location,
         lat, 
         lng, 
         radius = 50, 
@@ -338,40 +339,281 @@ export async function registerRoutes(app: Express): Promise<Server> {
         maxPrice,
         sortBy = 'newest',
         page = 1,
-        limit = 20 
+        limit = 20,
+        checkIn,
+        checkOut
       } = req.query;
 
-      const filters: any = {};
+      // Robust parameter validation with bounds checking
+      const validationErrors: string[] = [];
       
-      if (type) filters.type = type;
-      if (guests) filters.maxGuests = { gte: parseInt(guests as string) };
-      if (bedrooms) filters.bedrooms = { gte: parseInt(bedrooms as string) };
-      if (bathrooms) filters.bathrooms = { gte: parseInt(bathrooms as string) };
-      if (minPrice) filters.pricePerNight = { gte: parseInt(minPrice as string) };
-      if (maxPrice) filters.pricePerNight = { lte: parseInt(maxPrice as string) };
-
+      // Parse and validate coordinates with bounds checking
       let coordinates: { lat: number; lng: number } | undefined;
       if (lat && lng) {
-        coordinates = {
-          lat: parseFloat(lat as string),
-          lng: parseFloat(lng as string)
-        };
+        if (typeof lat !== 'string' || typeof lng !== 'string') {
+          validationErrors.push('Latitude and longitude must be strings');
+        } else {
+          const latNum = parseFloat(lat);
+          const lngNum = parseFloat(lng);
+          
+          if (isNaN(latNum) || isNaN(lngNum)) {
+            validationErrors.push('Invalid latitude or longitude format');
+          } else if (latNum < -90 || latNum > 90) {
+            validationErrors.push('Latitude must be between -90 and 90 degrees');
+          } else if (lngNum < -180 || lngNum > 180) {
+            validationErrors.push('Longitude must be between -180 and 180 degrees');
+          } else {
+            coordinates = { lat: latNum, lng: lngNum };
+          }
+        }
+      }
+      
+      // Parse and validate radius with maximum cap
+      let radiusKm = 50; // default
+      if (radius && typeof radius === 'string') {
+        const radiusNum = parseFloat(radius);
+        if (isNaN(radiusNum)) {
+          validationErrors.push('Radius must be a valid number');
+        } else if (radiusNum <= 0) {
+          validationErrors.push('Radius must be greater than 0');
+        } else if (radiusNum > 100) {
+          validationErrors.push('Maximum radius is 100km');
+        } else {
+          radiusKm = radiusNum;
+        }
+      }
+      
+      // Parse and validate pagination with bounds
+      let pageNum = 1;
+      let limitNum = 20;
+      
+      if (page && typeof page === 'string') {
+        const pageValue = parseInt(page);
+        if (isNaN(pageValue) || pageValue < 1) {
+          validationErrors.push('Page must be a positive integer');
+        } else if (pageValue > 1000) {
+          validationErrors.push('Maximum page number is 1000');
+        } else {
+          pageNum = pageValue;
+        }
+      }
+      
+      if (limit && typeof limit === 'string') {
+        const limitValue = parseInt(limit);
+        if (isNaN(limitValue) || limitValue < 1) {
+          validationErrors.push('Limit must be a positive integer');
+        } else if (limitValue > 100) {
+          validationErrors.push('Maximum limit is 100 items per page');
+        } else {
+          limitNum = limitValue;
+        }
+      }
+      
+      // Validate property type against enum
+      const validPropertyTypes = ['caravan', 'cabin', 'motorhome', 'tent', 'other'];
+      if (type && typeof type === 'string' && type !== '' && !validPropertyTypes.includes(type)) {
+        validationErrors.push(`Property type must be one of: ${validPropertyTypes.join(', ')}`);
+      }
+      
+      // Validate numeric filters with bounds
+      const parsePositiveInt = (value: any, fieldName: string, max: number = 50) => {
+        if (value && typeof value === 'string') {
+          const num = parseInt(value);
+          if (isNaN(num) || num < 0) {
+            validationErrors.push(`${fieldName} must be a non-negative integer`);
+            return undefined;
+          } else if (num > max) {
+            validationErrors.push(`Maximum ${fieldName.toLowerCase()} is ${max}`);
+            return undefined;
+          }
+          return num;
+        }
+        return undefined;
+      };
+      
+      const parsePositiveDecimal = (value: any, fieldName: string, max: number = 100000) => {
+        if (value && typeof value === 'string') {
+          const num = parseFloat(value);
+          if (isNaN(num) || num < 0) {
+            validationErrors.push(`${fieldName} must be a non-negative number`);
+            return undefined;
+          } else if (num > max) {
+            validationErrors.push(`Maximum ${fieldName.toLowerCase()} is ${max}`);
+            return undefined;
+          }
+          return num;
+        }
+        return undefined;
+      };
+      
+      const parsedGuests = parsePositiveInt(guests, 'Guests', 50);
+      const parsedBedrooms = parsePositiveInt(bedrooms, 'Bedrooms', 20);
+      const parsedBathrooms = parsePositiveInt(bathrooms, 'Bathrooms', 20);
+      const parsedMinPrice = parsePositiveDecimal(minPrice, 'Min price');
+      const parsedMaxPrice = parsePositiveDecimal(maxPrice, 'Max price');
+      
+      // Validate price range consistency
+      if (parsedMinPrice !== undefined && parsedMaxPrice !== undefined && parsedMinPrice > parsedMaxPrice) {
+        validationErrors.push('Minimum price cannot be greater than maximum price');
+      }
+      
+      // Validate sort parameter
+      const validSortOptions = ['newest', 'oldest', 'price_low', 'price_high', 'distance'];
+      let sortOption = 'newest';
+      if (sortBy && typeof sortBy === 'string') {
+        if (!validSortOptions.includes(sortBy)) {
+          validationErrors.push(`Sort option must be one of: ${validSortOptions.join(', ')}`);
+        } else {
+          sortOption = sortBy;
+        }
+      }
+      
+      // Validate date format for availability filters
+      const validateDate = (dateStr: any, fieldName: string) => {
+        if (dateStr && typeof dateStr === 'string') {
+          const date = new Date(dateStr);
+          if (isNaN(date.getTime())) {
+            validationErrors.push(`${fieldName} must be a valid date`);
+            return undefined;
+          }
+          return dateStr;
+        }
+        return undefined;
+      };
+      
+      const validCheckIn = validateDate(checkIn, 'Check-in date');
+      const validCheckOut = validateDate(checkOut, 'Check-out date');
+      
+      // Return validation errors if any
+      if (validationErrors.length > 0) {
+        return res.status(400).json({ 
+          error: 'Validation failed', 
+          details: validationErrors 
+        });
       }
 
-      const listings = await storage.searchListings(
+      // Build filters object for the enhanced search
+      const filters: any = {};
+      
+      // Location text search with length limits
+      if (location && typeof location === 'string' && location.trim()) {
+        const trimmedLocation = location.trim();
+        if (trimmedLocation.length > 200) {
+          return res.status(400).json({ error: 'Location search term too long (max 200 characters)' });
+        }
+        filters.location = trimmedLocation;
+      }
+      
+      // Add validated filters
+      if (type && typeof type === 'string' && type !== '') {
+        filters.type = type;
+      }
+      
+      if (parsedGuests !== undefined) {
+        filters.guests = parsedGuests;
+      }
+      
+      if (parsedBedrooms !== undefined) {
+        filters.bedrooms = parsedBedrooms;
+      }
+      
+      if (parsedBathrooms !== undefined) {
+        filters.bathrooms = parsedBathrooms;
+      }
+      
+      // Add validated price filters
+      if (parsedMinPrice !== undefined) {
+        filters.minPrice = parsedMinPrice;
+      }
+      if (parsedMaxPrice !== undefined) {
+        filters.maxPrice = parsedMaxPrice;
+      }
+
+      // Date filters for availability
+      if (validCheckIn) {
+        filters.checkIn = validCheckIn;
+      }
+      if (validCheckOut) {
+        filters.checkOut = validCheckOut;
+      }
+
+      // Parse and validate amenities array
+      let amenitiesArray: string[] | undefined;
+      if (amenities && typeof amenities === 'string' && amenities.trim()) {
+        const amenitiesList = amenities.split(',').map(a => a.trim()).filter(a => a.length > 0);
+        if (amenitiesList.length > 20) {
+          return res.status(400).json({ error: 'Maximum 20 amenities allowed in filter' });
+        }
+        // Validate amenity names (basic sanitization)
+        const validAmenities = amenitiesList.filter(a => /^[a-zA-Z0-9\s\-_]{1,50}$/.test(a));
+        if (validAmenities.length !== amenitiesList.length) {
+          return res.status(400).json({ error: 'Invalid amenity names detected' });
+        }
+        amenitiesArray = validAmenities;
+      }
+
+      // Default to distance sort if coordinates provided, otherwise newest
+      if (coordinates && sortOption === 'newest') {
+        sortOption = 'distance';
+      }
+
+      // Log search request for debugging
+      console.log('Search request:', {
         filters,
         coordinates,
-        parseInt(radius as string),
-        sortBy as string,
-        parseInt(page as string),
-        parseInt(limit as string),
-        amenities ? (amenities as string).split(',') : undefined
+        radius: radiusKm,
+        sortBy: sortOption,
+        page: pageNum,
+        limit: limitNum,
+        amenities: amenitiesArray
+      });
+
+      // Execute search
+      const searchResult = await storage.searchListings(
+        filters,
+        coordinates,
+        radiusKm,
+        sortOption,
+        pageNum,
+        limitNum,
+        amenitiesArray
       );
 
-      res.json(listings);
+      // Calculate pagination metadata
+      const totalPages = Math.ceil(searchResult.totalCount / limitNum);
+      const hasNextPage = pageNum < totalPages;
+      const hasPrevPage = pageNum > 1;
+
+      // Return standardized response with comprehensive metadata
+      res.json({
+        listings: searchResult.listings,
+        metadata: {
+          page: pageNum,
+          limit: limitNum,
+          total: searchResult.totalCount,
+          totalPages,
+          hasNextPage,
+          hasPrevPage,
+          resultsCount: searchResult.listings.length,
+          hasCoordinates: !!coordinates,
+          searchRadius: coordinates ? radiusKm : null,
+          sortBy: sortOption,
+          appliedFilters: Object.keys(filters).length,
+          searchQuery: {
+            filters,
+            coordinates,
+            radius: radiusKm,
+            sort: sortOption,
+            amenities: amenitiesArray
+          }
+        }
+      });
     } catch (error) {
       console.error('Search listings error:', error);
-      res.status(500).json({ error: 'Failed to search listings' });
+      res.status(500).json({ 
+        error: 'Failed to search listings',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 

@@ -7,33 +7,72 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Filter, X, MapPin, Calendar, Users } from 'lucide-react';
 
+interface SearchFiltersState {
+  location: string;
+  type: string;
+  guests: string;
+  bedrooms: string;
+  bathrooms: string;
+  minPrice: string;
+  maxPrice: string;
+  checkIn: string;
+  checkOut: string;
+  amenities: string[];
+  sortBy: string;
+}
+
 interface SearchFiltersProps {
-  onFiltersChange?: (filters: any) => void;
+  onFiltersChange?: (filters: SearchFiltersState) => void;
   onToggle?: () => void;
   isOpen?: boolean;
+  initialFilters?: Partial<SearchFiltersState>;
 }
 
 export default function SearchFilters({ 
   onFiltersChange = () => console.log('Filters changed'),
   onToggle = () => console.log('Filters toggled'),
-  isOpen = false 
+  isOpen = false,
+  initialFilters = {}
 }: SearchFiltersProps) {
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<SearchFiltersState>({
     location: '',
-    propertyType: '',
-    guests: [2],
-    priceRange: [0, 500],
+    type: '',
+    guests: '',
+    bedrooms: '',
+    bathrooms: '',
+    minPrice: '',
+    maxPrice: '',
     checkIn: '',
     checkOut: '',
-    amenities: [] as string[],
+    amenities: [],
+    sortBy: 'newest',
+    ...initialFilters
   });
 
   const amenitiesList = [
     'Wi-Fi', 'Kitchen', 'Parking', 'Hot Tub', 'Fireplace', 'BBQ',
-    'Outdoor Space', 'Heating', 'Pet Friendly', 'Lake Access', 'Mountain Views'
+    'Outdoor Space', 'Heating', 'Pet Friendly', 'Lake Access', 'Mountain Views',
+    'Air Conditioning', 'Washer', 'Dryer', 'Pool', 'Gym', 'Workspace'
   ];
 
-  const handleFilterChange = (key: string, value: any) => {
+  const propertyTypes = [
+    { value: '', label: 'Any type' },
+    { value: 'caravan', label: 'Caravan' },
+    { value: 'cabin', label: 'Cabin' },
+    { value: 'motorhome', label: 'Motorhome' },
+    { value: 'tent', label: 'Tent' },
+    { value: 'other', label: 'Other' }
+  ];
+
+  const sortOptions = [
+    { value: 'newest', label: 'Newest first' },
+    { value: 'oldest', label: 'Oldest first' },
+    { value: 'price_low', label: 'Price: Low to High' },
+    { value: 'price_high', label: 'Price: High to Low' },
+    { value: 'distance', label: 'Distance' }
+  ];
+
+  const handleFilterChange = (key: keyof SearchFiltersState, value: any) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
     onFiltersChange(newFilters);
@@ -47,14 +86,18 @@ export default function SearchFilters({
   };
 
   const clearFilters = () => {
-    const clearedFilters = {
+    const clearedFilters: SearchFiltersState = {
       location: '',
-      propertyType: '',
-      guests: [2],
-      priceRange: [0, 500],
+      type: '',
+      guests: '',
+      bedrooms: '',
+      bathrooms: '',
+      minPrice: '',
+      maxPrice: '',
       checkIn: '',
       checkOut: '',
       amenities: [],
+      sortBy: 'newest'
     };
     setFilters(clearedFilters);
     onFiltersChange(clearedFilters);
@@ -62,13 +105,16 @@ export default function SearchFilters({
 
   const activeFiltersCount = [
     filters.location,
-    filters.propertyType,
+    filters.type,
+    filters.guests,
+    filters.bedrooms,
+    filters.bathrooms,
+    filters.minPrice,
+    filters.maxPrice,
     filters.checkIn,
     filters.checkOut,
     ...filters.amenities
-  ].filter(Boolean).length + 
-  (filters.guests[0] !== 2 ? 1 : 0) + 
-  (filters.priceRange[0] !== 0 || filters.priceRange[1] !== 500 ? 1 : 0);
+  ].filter(Boolean).length;
 
   return (
     <div className="w-full">
@@ -98,14 +144,14 @@ export default function SearchFilters({
 
       {/* Filter Panel */}
       {isOpen && (
-        <div className="bg-card rounded-xl border border-card-border p-6 space-y-6">
+        <div className="bg-card rounded-xl border p-6 space-y-6">
           {/* Location & Dates Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">Location</label>
               <div className="relative">
                 <Input
-                  placeholder="Where do you want to go?"
+                  placeholder="City, country, or property name"
                   value={filters.location}
                   onChange={(e) => handleFilterChange('location', e.target.value)}
                   className="pl-9"
@@ -144,56 +190,132 @@ export default function SearchFilters({
             </div>
           </div>
 
-          {/* Property Type & Guests Row */}
+          {/* Property Type & Sort Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">Property Type</label>
               <Select
-                value={filters.propertyType}
-                onValueChange={(value) => handleFilterChange('propertyType', value)}
+                value={filters.type}
+                onValueChange={(value) => handleFilterChange('type', value)}
               >
                 <SelectTrigger data-testid="select-property-type">
                   <SelectValue placeholder="Any type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="any">Any type</SelectItem>
-                  <SelectItem value="caravan">Caravan</SelectItem>
-                  <SelectItem value="cabin">Cabin</SelectItem>
+                  {propertyTypes.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             
             <div>
-              <label className="block text-sm font-medium mb-2">
-                Guests: {filters.guests[0]}
-              </label>
-              <div className="flex items-center space-x-3">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <Slider
-                  value={filters.guests}
-                  onValueChange={(value) => handleFilterChange('guests', value)}
-                  max={20}
-                  min={1}
-                  step={1}
-                  className="flex-1"
-                />
-              </div>
+              <label className="block text-sm font-medium mb-2">Sort By</label>
+              <Select
+                value={filters.sortBy}
+                onValueChange={(value) => handleFilterChange('sortBy', value)}
+              >
+                <SelectTrigger data-testid="select-sort-by">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Capacity & Rooms Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Guests</label>
+              <Select
+                value={filters.guests}
+                onValueChange={(value) => handleFilterChange('guests', value)}
+              >
+                <SelectTrigger data-testid="select-guests">
+                  <SelectValue placeholder="Any" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Any</SelectItem>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16].map((num) => (
+                    <SelectItem key={num} value={num.toString()}>
+                      {num}+ guest{num > 1 ? 's' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-2">Bedrooms</label>
+              <Select
+                value={filters.bedrooms}
+                onValueChange={(value) => handleFilterChange('bedrooms', value)}
+              >
+                <SelectTrigger data-testid="select-bedrooms">
+                  <SelectValue placeholder="Any" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Any</SelectItem>
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
+                    <SelectItem key={num} value={num.toString()}>
+                      {num}+ bedroom{num > 1 ? 's' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-2">Bathrooms</label>
+              <Select
+                value={filters.bathrooms}
+                onValueChange={(value) => handleFilterChange('bathrooms', value)}
+              >
+                <SelectTrigger data-testid="select-bathrooms">
+                  <SelectValue placeholder="Any" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Any</SelectItem>
+                  {[1, 2, 3, 4, 5, 6].map((num) => (
+                    <SelectItem key={num} value={num.toString()}>
+                      {num}+ bathroom{num > 1 ? 's' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
           {/* Price Range */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Price Range: £{filters.priceRange[0]} - £{filters.priceRange[1]} per night
-            </label>
-            <Slider
-              value={filters.priceRange}
-              onValueChange={(value) => handleFilterChange('priceRange', value)}
-              max={500}
-              min={0}
-              step={10}
-              className="w-full"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Min Price per night</label>
+              <Input
+                type="number"
+                placeholder="£0"
+                value={filters.minPrice}
+                onChange={(e) => handleFilterChange('minPrice', e.target.value)}
+                data-testid="input-min-price"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Max Price per night</label>
+              <Input
+                type="number"
+                placeholder="£1000"
+                value={filters.maxPrice}
+                onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
+                data-testid="input-max-price"
+              />
+            </div>
           </div>
 
           {/* Amenities */}
@@ -219,34 +341,93 @@ export default function SearchFilters({
             </div>
           </div>
 
-          {/* Active Filters */}
+          {/* Active Filters Summary */}
           {activeFiltersCount > 0 && (
             <div>
               <label className="block text-sm font-medium mb-3">Active Filters</label>
               <div className="flex flex-wrap gap-2">
                 {filters.location && (
-                  <Badge variant="secondary" className="flex items-center space-x-1">
-                    <span>{filters.location}</span>
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <span>📍 {filters.location}</span>
                     <X
-                      className="h-3 w-3 cursor-pointer"
+                      className="h-3 w-3 cursor-pointer hover:text-destructive"
                       onClick={() => handleFilterChange('location', '')}
                     />
                   </Badge>
                 )}
-                {filters.propertyType && (
-                  <Badge variant="secondary" className="flex items-center space-x-1">
-                    <span>{filters.propertyType}</span>
+                {filters.type && (
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <span>{propertyTypes.find(t => t.value === filters.type)?.label}</span>
                     <X
-                      className="h-3 w-3 cursor-pointer"
-                      onClick={() => handleFilterChange('propertyType', '')}
+                      className="h-3 w-3 cursor-pointer hover:text-destructive"
+                      onClick={() => handleFilterChange('type', '')}
+                    />
+                  </Badge>
+                )}
+                {filters.guests && (
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <span>{filters.guests}+ guests</span>
+                    <X
+                      className="h-3 w-3 cursor-pointer hover:text-destructive"
+                      onClick={() => handleFilterChange('guests', '')}
+                    />
+                  </Badge>
+                )}
+                {filters.bedrooms && (
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <span>{filters.bedrooms}+ bedrooms</span>
+                    <X
+                      className="h-3 w-3 cursor-pointer hover:text-destructive"
+                      onClick={() => handleFilterChange('bedrooms', '')}
+                    />
+                  </Badge>
+                )}
+                {filters.bathrooms && (
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <span>{filters.bathrooms}+ bathrooms</span>
+                    <X
+                      className="h-3 w-3 cursor-pointer hover:text-destructive"
+                      onClick={() => handleFilterChange('bathrooms', '')}
+                    />
+                  </Badge>
+                )}
+                {(filters.minPrice || filters.maxPrice) && (
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <span>
+                      £{filters.minPrice || '0'} - £{filters.maxPrice || '∞'}
+                    </span>
+                    <X
+                      className="h-3 w-3 cursor-pointer hover:text-destructive"
+                      onClick={() => {
+                        handleFilterChange('minPrice', '');
+                        handleFilterChange('maxPrice', '');
+                      }}
+                    />
+                  </Badge>
+                )}
+                {filters.checkIn && (
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <span>From {filters.checkIn}</span>
+                    <X
+                      className="h-3 w-3 cursor-pointer hover:text-destructive"
+                      onClick={() => handleFilterChange('checkIn', '')}
+                    />
+                  </Badge>
+                )}
+                {filters.checkOut && (
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <span>To {filters.checkOut}</span>
+                    <X
+                      className="h-3 w-3 cursor-pointer hover:text-destructive"
+                      onClick={() => handleFilterChange('checkOut', '')}
                     />
                   </Badge>
                 )}
                 {filters.amenities.map((amenity) => (
-                  <Badge key={amenity} variant="secondary" className="flex items-center space-x-1">
+                  <Badge key={amenity} variant="secondary" className="flex items-center gap-1">
                     <span>{amenity}</span>
                     <X
-                      className="h-3 w-3 cursor-pointer"
+                      className="h-3 w-3 cursor-pointer hover:text-destructive"
                       onClick={() => handleAmenityToggle(amenity)}
                     />
                   </Badge>
