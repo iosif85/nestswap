@@ -282,13 +282,6 @@ export class PostgresStorage implements IStorage {
       conditions.push(gte(listings.bathrooms, Number(filters.bathrooms)));
     }
 
-    // Handle price range filters
-    if (filters.minPrice && Number(filters.minPrice) > 0) {
-      conditions.push(gte(listings.pricePerNight, filters.minPrice));
-    }
-    if (filters.maxPrice && Number(filters.maxPrice) > 0) {
-      conditions.push(lte(listings.pricePerNight, filters.maxPrice));
-    }
 
     // Handle location-based search with performance optimizations
     if (coordinates && radiusKm && radiusKm > 0) {
@@ -349,7 +342,6 @@ export class PostgresStorage implements IStorage {
         maxGuests: listings.maxGuests,
         bedrooms: listings.bedrooms,
         bathrooms: listings.bathrooms,
-        pricePerNight: listings.pricePerNight,
         latitude: listings.latitude,
         longitude: listings.longitude,
         address: listings.address,
@@ -386,12 +378,6 @@ export class PostgresStorage implements IStorage {
         } else {
           orderBy = desc(listings.createdAt);
         }
-        break;
-      case 'price_low':
-        orderBy = asc(listings.pricePerNight);
-        break;
-      case 'price_high':
-        orderBy = desc(listings.pricePerNight);
         break;
       case 'newest':
         orderBy = desc(listings.createdAt);

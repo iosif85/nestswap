@@ -27,7 +27,6 @@ const createListingSchema = z.object({
   maxGuests: z.number().min(1).max(50),
   bedrooms: z.number().min(0).max(20),
   bathrooms: z.number().min(0).max(10),
-  pricePerNight: z.number().min(0),
   houseRules: z.string().optional(),
 });
 
@@ -69,7 +68,6 @@ export default function CreateListingPage() {
       maxGuests: 2,
       bedrooms: 1,
       bathrooms: 1,
-      pricePerNight: 50,
       houseRules: '',
     },
   });
@@ -416,26 +414,6 @@ export default function CreateListingPage() {
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="pricePerNight"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Price per Night (£)</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              data-testid="input-price"
-                              {...field}
-                              onChange={e => field.onChange(parseFloat(e.target.value))}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
