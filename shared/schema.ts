@@ -14,6 +14,10 @@ export const swapStatusEnum = pgEnum("swap_status", [
   "pending", "accepted", "declined", "cancelled"
 ]);
 
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "swap_request_received", "swap_request_accepted", "swap_request_declined", "swap_cancelled"
+]);
+
 // Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -105,6 +109,18 @@ export const swaps = pgTable("swaps", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Notifications table
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: notificationTypeEnum("type").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  swapId: varchar("swap_id").references(() => swaps.id, { onDelete: "cascade" }),
+  isRead: boolean("is_read").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   listings: many(listings),
@@ -112,6 +128,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   receivedMessages: many(messages, { relationName: "receiver" }),
   requestedSwaps: many(swaps, { relationName: "requester" }),
   receivedSwaps: many(swaps, { relationName: "requested" }),
+  notifications: many(notifications),
 }));
 
 export const listingsRelations = relations(listings, ({ one, many }) => ({
@@ -157,7 +174,7 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   }),
 }));
 
-export const swapsRelations = relations(swaps, ({ one }) => ({
+export const swapsRelations = relations(swaps, ({ one, many }) => ({
   requester: one(users, {
     fields: [swaps.requesterId],
     references: [users.id],
@@ -177,6 +194,18 @@ export const swapsRelations = relations(swaps, ({ one }) => ({
     fields: [swaps.requestedListingId],
     references: [listings.id],
     relationName: "requestedListing",
+  }),
+  notifications: many(notifications),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+  swap: one(swaps, {
+    fields: [notifications.swapId],
+    references: [swaps.id],
   }),
 }));
 
@@ -253,6 +282,15 @@ export const insertAvailabilitySchema = createInsertSchema(availability, {
   id: true,
 });
 
+export const insertNotificationSchema = createInsertSchema(notifications, {
+  title: z.string().min(1).max(200),
+  message: z.string().min(1).max(500),
+}).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -267,6 +305,8 @@ export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Swap = typeof swaps.$inferSelect;
 export type InsertSwap = z.infer<typeof insertSwapSchema>;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
 // Helper types
 export type UserWithSubscription = User & {
