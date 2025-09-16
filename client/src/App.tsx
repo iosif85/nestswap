@@ -31,6 +31,7 @@ import ListingsPage from './pages/listings';
 import CreateListingPage from './pages/create-listing';
 import SubscribePage from './pages/subscribe';
 import ListingDetailPage from './pages/listing-detail';
+import SwapRequestsPage from './pages/swap-requests';
 
 // Import shared types
 import { User, Message, MessageWithSender, MessageThreadSummary } from '@shared/schema';
@@ -381,6 +382,7 @@ function Router() {
       <Route path="/billing" component={BillingPage} />
       <Route path="/subscribe" component={SubscribePage} />
       <Route path="/messages" component={MessagesPage} />
+      <Route path="/swap-requests" component={SwapRequestsPage} />
       <Route path="/create-listing" component={CreateListingPage} />
       <Route>
         {/* 404 page */}

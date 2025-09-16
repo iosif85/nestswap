@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, MapPin, Users, Bed, Bath, Star, Heart, Calendar, MessageCircle, Share2 } from 'lucide-react';
@@ -6,10 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import SwapRequestModal from '@/components/SwapRequestModal';
 
 export default function ListingDetailPage() {
   const params = useParams();
   const [, setLocation] = useLocation();
+  const [showSwapModal, setShowSwapModal] = useState(false);
   const listingId = params.id;
 
   const { data: listing, isLoading, error } = useQuery({
@@ -238,7 +241,11 @@ export default function ListingDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Button className="w-full" data-testid="button-request-swap">
+                <Button 
+                  className="w-full" 
+                  onClick={() => setShowSwapModal(true)}
+                  data-testid="button-request-swap"
+                >
                   <Calendar className="h-4 w-4 mr-2" />
                   Request Swap
                 </Button>
@@ -275,6 +282,15 @@ export default function ListingDetailPage() {
             </Card>
           </div>
         </div>
+
+        {/* Swap Request Modal */}
+        {listing && (
+          <SwapRequestModal
+            isOpen={showSwapModal}
+            onClose={() => setShowSwapModal(false)}
+            requestedListing={listing}
+          />
+        )}
       </div>
     </div>
   );
