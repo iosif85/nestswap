@@ -91,6 +91,8 @@ export interface IStorage {
   getSwapById(id: string): Promise<SwapWithDetails | undefined>;
   getSwapsByUser(userId: string): Promise<SwapWithDetails[]>;
   updateSwapStatus(id: string, status: "pending" | "accepted" | "declined" | "cancelled"): Promise<Swap>;
+  checkSwapConflicts(requesterListingId: string, requestedListingId: string, startDate: Date, endDate: Date): Promise<Swap[]>;
+  acceptSwapWithConflictCheck(id: string): Promise<Swap>;
   
   // Admin operations
   getAllUsers(limit?: number, offset?: number): Promise<User[]>;
@@ -669,6 +671,66 @@ export class PostgresStorage implements IStorage {
       .where(eq(swaps.id, id))
       .returning();
     return swap;
+  }
+
+  async checkSwapConflicts(requesterListingId: string, requestedListingId: string, startDate: Date, endDate: Date): Promise<Swap[]> {
+    // Check for overlapping accepted swaps for either listing
+    const conflictingSwaps = await db.select().from(swaps)
+      .where(
+        and(
+          sql`${swaps.status} = 'accepted'`,
+          sql`(
+            (${swaps.requesterListingId} = ${requesterListingId} OR ${swaps.requestedListingId} = ${requesterListingId} OR
+             ${swaps.requesterListingId} = ${requestedListingId} OR ${swaps.requestedListingId} = ${requestedListingId})
+            AND
+            (${swaps.startDate} < ${endDate} AND ${swaps.endDate} > ${startDate})
+          )`
+        )
+      );
+    
+    return conflictingSwaps;
+  }
+
+  async acceptSwapWithConflictCheck(id: string): Promise<Swap> {
+    // Use transaction to ensure atomicity
+    return await db.transaction(async (tx) => {
+      // Re-fetch the swap within transaction
+      const [swap] = await tx.select().from(swaps).where(eq(swaps.id, id));
+      
+      if (!swap) {
+        throw new Error('Swap not found');
+      }
+      
+      if (swap.status !== 'pending') {
+        throw new Error('Swap is not pending');
+      }
+      
+      // Check for conflicts within transaction
+      const conflictingSwaps = await tx.select().from(swaps)
+        .where(
+          and(
+            sql`${swaps.status} = 'accepted'`,
+            sql`(
+              (${swaps.requesterListingId} = ${swap.requesterListingId} OR ${swaps.requestedListingId} = ${swap.requesterListingId} OR
+               ${swaps.requesterListingId} = ${swap.requestedListingId} OR ${swaps.requestedListingId} = ${swap.requestedListingId})
+              AND
+              (${swaps.startDate} < ${swap.endDate} AND ${swaps.endDate} > ${swap.startDate})
+            )`
+          )
+        );
+      
+      if (conflictingSwaps.length > 0) {
+        throw new Error('Conflicting swaps exist');
+      }
+      
+      // Accept the swap
+      const [updatedSwap] = await tx.update(swaps)
+        .set({ status: 'accepted', updatedAt: new Date() })
+        .where(eq(swaps.id, id))
+        .returning();
+      
+      return updatedSwap;
+    });
   }
 
   // Admin operations
