@@ -692,29 +692,47 @@ export class PostgresStorage implements IStorage {
   }
 
   async acceptSwapWithConflictCheck(id: string): Promise<Swap> {
-    // Use transaction to ensure atomicity
+    // Use transaction with explicit locking to prevent MVCC race conditions
     return await db.transaction(async (tx) => {
-      // Re-fetch the swap within transaction
-      const [swap] = await tx.select().from(swaps).where(eq(swaps.id, id));
+      // Lock the target swap row first to prevent concurrent acceptance
+      const [targetSwap] = await tx.select().from(swaps)
+        .where(eq(swaps.id, id))
+        .for('update');
       
-      if (!swap) {
+      if (!targetSwap) {
         throw new Error('Swap not found');
       }
       
-      if (swap.status !== 'pending') {
+      if (targetSwap.status !== 'pending') {
         throw new Error('Swap is not pending');
       }
       
-      // Check for conflicts within transaction
+      // Lock all pending swaps for the same listings and date ranges
+      // This prevents concurrent acceptances of overlapping swaps
+      await tx.select().from(swaps)
+        .where(
+          and(
+            eq(swaps.status, 'pending'),
+            sql`(
+              (${swaps.requesterListingId} = ${targetSwap.requesterListingId} OR ${swaps.requestedListingId} = ${targetSwap.requesterListingId} OR
+               ${swaps.requesterListingId} = ${targetSwap.requestedListingId} OR ${swaps.requestedListingId} = ${targetSwap.requestedListingId})
+              AND
+              (${swaps.startDate} < ${targetSwap.endDate} AND ${swaps.endDate} > ${targetSwap.startDate})
+            )`
+          )
+        )
+        .for('update');
+      
+      // Now check for any accepted conflicts (should be none after locking)
       const conflictingSwaps = await tx.select().from(swaps)
         .where(
           and(
-            sql`${swaps.status} = 'accepted'`,
+            eq(swaps.status, 'accepted'),
             sql`(
-              (${swaps.requesterListingId} = ${swap.requesterListingId} OR ${swaps.requestedListingId} = ${swap.requesterListingId} OR
-               ${swaps.requesterListingId} = ${swap.requestedListingId} OR ${swaps.requestedListingId} = ${swap.requestedListingId})
+              (${swaps.requesterListingId} = ${targetSwap.requesterListingId} OR ${swaps.requestedListingId} = ${targetSwap.requesterListingId} OR
+               ${swaps.requesterListingId} = ${targetSwap.requestedListingId} OR ${swaps.requestedListingId} = ${targetSwap.requestedListingId})
               AND
-              (${swaps.startDate} < ${swap.endDate} AND ${swaps.endDate} > ${swap.startDate})
+              (${swaps.startDate} < ${targetSwap.endDate} AND ${swaps.endDate} > ${targetSwap.startDate})
             )`
           )
         );
@@ -723,13 +741,17 @@ export class PostgresStorage implements IStorage {
         throw new Error('Conflicting swaps exist');
       }
       
-      // Accept the swap
-      const [updatedSwap] = await tx.update(swaps)
+      // Accept the swap atomically - double-check status still pending
+      const updatedSwaps = await tx.update(swaps)
         .set({ status: 'accepted', updatedAt: new Date() })
-        .where(eq(swaps.id, id))
+        .where(and(eq(swaps.id, id), eq(swaps.status, 'pending')))
         .returning();
       
-      return updatedSwap;
+      if (updatedSwaps.length === 0) {
+        throw new Error('Swap is no longer pending');
+      }
+      
+      return updatedSwaps[0];
     });
   }
 
