@@ -8,6 +8,8 @@ import { storage } from "./storage";
 import { AuthService, authenticateToken, requireSubscription, requireAdmin, type AuthRequest } from "./auth-middleware";
 import { emailService } from "./email-service";
 import type { InsertUser } from "@shared/schema";
+import { insertSwapSchema } from "@shared/schema";
+import { z } from "zod";
 
 // Rate limiting configurations
 const authLimiter = rateLimit({
@@ -1089,10 +1091,240 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  app.post('/api/swaps', authenticateToken, requireSubscription, async (req: AuthRequest, res: express.Response) => {
-    // TODO: Implement swap creation (subscription required)
-    res.json({ message: 'Create swap endpoint - to be implemented (requires subscription)' });
+  // Swap routes
+  app.post('/api/swaps', 
+    authenticateToken, 
+    requireSubscription,
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        if (!req.user) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        // Validate using Zod schema - insertSwapSchema already omits id, requesterId, createdAt, updatedAt
+        const createSwapSchema = insertSwapSchema.extend({
+          requestedUserId: z.string().min(1),
+          requesterListingId: z.string().min(1),
+          requestedListingId: z.string().min(1),
+          startDate: z.coerce.date(), // Handle JSON string dates  
+          endDate: z.coerce.date(), // Handle JSON string dates
+          notes: z.string().max(1000).optional(),
+        }).strict(); // Only allow specified fields
+
+        const swapValidation = createSwapSchema.safeParse(req.body);
+
+        if (!swapValidation.success) {
+          return res.status(400).json({ 
+            error: 'Validation failed', 
+            details: swapValidation.error.errors 
+          });
+        }
+
+        const { requestedUserId, requesterListingId, requestedListingId, startDate, endDate, notes } = swapValidation.data;
+
+        // Prevent self-swaps
+        if (requestedUserId === req.user.id) {
+          return res.status(400).json({ error: 'Cannot create swap request with yourself' });
+        }
+
+        // Prevent identical listing IDs
+        if (requesterListingId === requestedListingId) {
+          return res.status(400).json({ error: 'Cannot swap the same listing' });
+        }
+
+        // Validate dates - must be in the future and have minimum duration
+        const now = new Date();
+        const startDateTime = new Date(startDate);
+        const endDateTime = new Date(endDate);
+        
+        if (startDateTime <= now) {
+          return res.status(400).json({ error: 'Start date must be in the future' });
+        }
+        
+        if (endDateTime <= startDateTime) {
+          return res.status(400).json({ error: 'End date must be after start date' });
+        }
+
+        // Minimum 1 day duration
+        const durationMs = endDateTime.getTime() - startDateTime.getTime();
+        if (durationMs < 24 * 60 * 60 * 1000) {
+          return res.status(400).json({ error: 'Swap duration must be at least 1 day' });
+        }
+
+        // Validate that the requester owns the requester listing and it's active
+        const requesterListing = await storage.getListingById(requesterListingId);
+        if (!requesterListing || requesterListing.ownerId !== req.user.id) {
+          return res.status(403).json({ error: 'You can only create swaps for your own listings' });
+        }
+        if (!requesterListing.isActive) {
+          return res.status(400).json({ error: 'Your listing must be active to create swap requests' });
+        }
+
+        // Validate that the requested listing exists, belongs to the requested user, and is active
+        const requestedListing = await storage.getListingById(requestedListingId);
+        if (!requestedListing || requestedListing.ownerId !== requestedUserId) {
+          return res.status(400).json({ error: 'Invalid listing or user combination' });
+        }
+        if (!requestedListing.isActive) {
+          return res.status(400).json({ error: 'Requested listing is not available for swaps' });
+        }
+
+        // Check for conflicting accepted swaps 
+        const conflicts = await storage.checkSwapConflicts(
+          requesterListingId, 
+          requestedListingId, 
+          startDateTime, 
+          endDateTime
+        );
+        
+        if (conflicts.length > 0) {
+          return res.status(409).json({ 
+            error: 'Conflicting swap requests exist for this date range', 
+            conflicts: conflicts.length 
+          });
+        }
+
+        // Create the swap
+        const swap = await storage.createSwap({
+          requesterId: req.user.id,
+          requestedUserId,
+          requesterListingId,
+          requestedListingId,
+          startDate: startDateTime,
+          endDate: endDateTime,
+          notes,
+        });
+
+        // Return the swap with details
+        const swapWithDetails = await storage.getSwapById(swap.id);
+        res.status(201).json(swapWithDetails);
+      } catch (error) {
+        console.error('Create swap error:', error);
+        res.status(500).json({ error: 'Failed to create swap request' });
+      }
+    }
+  );
+
+  app.get('/api/swaps', authenticateToken, async (req: AuthRequest, res: express.Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const swaps = await storage.getSwapsByUser(req.user.id);
+      res.json(swaps);
+    } catch (error) {
+      console.error('Get swaps error:', error);
+      res.status(500).json({ error: 'Failed to get swap requests' });
+    }
   });
+
+  app.get('/api/swaps/:id', authenticateToken, async (req: AuthRequest, res: express.Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const { id } = req.params;
+      const swap = await storage.getSwapById(id);
+      
+      if (!swap) {
+        return res.status(404).json({ error: 'Swap request not found' });
+      }
+
+      // Check if user is involved in this swap
+      if (swap.requesterId !== req.user.id && swap.requestedUserId !== req.user.id) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      res.json(swap);
+    } catch (error) {
+      console.error('Get swap error:', error);
+      res.status(500).json({ error: 'Failed to get swap request' });
+    }
+  });
+
+  app.patch('/api/swaps/:id/status', 
+    authenticateToken,
+    requireSubscription, // Require subscription for swap status changes
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        if (!req.user) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        // Validate using Zod
+        const statusSchema = z.object({
+          status: z.enum(['accepted', 'declined', 'cancelled'])
+        });
+
+        const validation = statusSchema.safeParse(req.body);
+        if (!validation.success) {
+          return res.status(400).json({ 
+            error: 'Validation failed', 
+            details: validation.error.errors 
+          });
+        }
+
+        const { id } = req.params;
+        const { status } = validation.data;
+
+        const swap = await storage.getSwapById(id);
+        if (!swap) {
+          return res.status(404).json({ error: 'Swap request not found' });
+        }
+
+        // Check if user is involved in this swap
+        if (swap.requesterId !== req.user.id && swap.requestedUserId !== req.user.id) {
+          return res.status(403).json({ error: 'Access denied - you are not involved in this swap request' });
+        }
+
+        // Only pending swaps can be modified
+        if (swap.status !== 'pending') {
+          return res.status(400).json({ error: 'Cannot modify swap request that is not pending' });
+        }
+
+        // Authorization rules for status changes
+        if (status === 'cancelled') {
+          if (swap.requesterId !== req.user.id) {
+            return res.status(403).json({ error: 'Only the requester can cancel a swap request' });
+          }
+        } else if (status === 'accepted' || status === 'declined') {
+          if (swap.requestedUserId !== req.user.id) {
+            return res.status(403).json({ error: 'Only the requested user can accept or decline a swap request' });
+          }
+        }
+
+        // Handle acceptance with transactional conflict checking
+        if (status === 'accepted') {
+          try {
+            const updatedSwap = await storage.acceptSwapWithConflictCheck(id);
+            const swapWithDetails = await storage.getSwapById(updatedSwap.id);
+            return res.json(swapWithDetails);
+          } catch (error: any) {
+            if (error.message === 'Conflicting swaps exist') {
+              return res.status(409).json({ 
+                error: 'This swap conflicts with other accepted swaps and cannot be accepted'
+              });
+            }
+            if (error.message === 'Swap is not pending') {
+              return res.status(400).json({ error: 'Cannot modify swap request that is not pending' });
+            }
+            throw error; // Re-throw unexpected errors
+          }
+        }
+
+        // For other status changes (decline, cancel)
+        const updatedSwap = await storage.updateSwapStatus(id, status);
+        const swapWithDetails = await storage.getSwapById(updatedSwap.id);
+        
+        res.json(swapWithDetails);
+      } catch (error) {
+        console.error('Update swap status error:', error);
+        res.status(500).json({ error: 'Failed to update swap request status' });
+      }
+    }
+  );
 
   // Messaging routes
   app.get('/api/messages/threads', authenticateToken, async (req: AuthRequest, res) => {
