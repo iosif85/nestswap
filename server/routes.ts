@@ -1101,14 +1101,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(401).json({ error: 'Unauthorized' });
         }
 
-        // Validate using Zod schema - insertSwapSchema already omits id, requesterId, createdAt, updatedAt
+        // Validate using strict Zod schema with business rules
         const createSwapSchema = insertSwapSchema.extend({
           requestedUserId: z.string().min(1),
           requesterListingId: z.string().min(1),
           requestedListingId: z.string().min(1),
-          startDate: z.coerce.date(), // Handle JSON string dates  
-          endDate: z.coerce.date(), // Handle JSON string dates
+          startDate: z.coerce.date(),
+          endDate: z.coerce.date(),
           notes: z.string().max(1000).optional(),
+        }).refine((data) => data.endDate > data.startDate, {
+          message: "End date must be after start date",
+          path: ["endDate"],
+        }).refine((data) => data.startDate > new Date(), {
+          message: "Start date must be in the future",
+          path: ["startDate"],
+        }).refine((data) => {
+          const diffTime = data.endDate.getTime() - data.startDate.getTime();
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
+          return diffDays >= 1;
+        }, {
+          message: "Swap must be at least 1 day long",
+          path: ["endDate"],
         }).strict(); // Only allow specified fields
 
         const swapValidation = createSwapSchema.safeParse(req.body);
@@ -1160,13 +1173,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ error: 'Your listing must be active to create swap requests' });
         }
 
-        // Validate that the requested listing exists, belongs to the requested user, and is active
+        // Critical: Validate that the requested listing belongs to the requested user
         const requestedListing = await storage.getListingById(requestedListingId);
         if (!requestedListing || requestedListing.ownerId !== requestedUserId) {
-          return res.status(400).json({ error: 'Invalid listing or user combination' });
+          return res.status(400).json({ error: 'The requested listing does not belong to the specified user' });
         }
         if (!requestedListing.isActive) {
-          return res.status(400).json({ error: 'Requested listing is not available for swaps' });
+          return res.status(400).json({ error: 'The requested listing must be active' });
         }
 
         // Check for conflicting accepted swaps 
@@ -1284,15 +1297,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ error: 'Cannot modify swap request that is not pending' });
         }
 
-        // Authorization rules for status changes
+        // Explicit authorization rules for status changes
         if (status === 'cancelled') {
+          // Only the requester can cancel their own swap request
           if (swap.requesterId !== req.user.id) {
             return res.status(403).json({ error: 'Only the requester can cancel a swap request' });
           }
         } else if (status === 'accepted' || status === 'declined') {
+          // Only the requested user can accept or decline swap requests
           if (swap.requestedUserId !== req.user.id) {
             return res.status(403).json({ error: 'Only the requested user can accept or decline a swap request' });
           }
+          
+          // For acceptance, verify both listings are still active
+          if (status === 'accepted') {
+            const [requesterListing, requestedListing] = await Promise.all([
+              storage.getListingById(swap.requesterListingId),
+              storage.getListingById(swap.requestedListingId)
+            ]);
+            
+            if (!requesterListing?.isActive || !requestedListing?.isActive) {
+              return res.status(400).json({ error: 'One or both listings are no longer active' });
+            }
+          }
+        } else {
+          return res.status(400).json({ error: 'Invalid status transition' });
         }
 
         // Handle acceptance with transactional conflict checking

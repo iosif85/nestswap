@@ -233,8 +233,8 @@ export const insertMessageSchema = createInsertSchema(messages, {
 });
 
 export const insertSwapSchema = createInsertSchema(swaps, {
-  startDate: z.date(),
-  endDate: z.date(),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(), 
   notes: z.string().max(1000).optional(),
 }).omit({
   id: true,
