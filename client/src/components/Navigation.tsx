@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Menu, X, User, MessageCircle, Heart, Bell } from 'lucide-react';
+import { Search, Menu, X, User, MessageCircle, Heart, Bell, ArrowLeftRight } from 'lucide-react';
 
 interface NavigationProps {
   isAuthenticated?: boolean;
@@ -20,6 +21,7 @@ export default function Navigation({
 }: NavigationProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [, setLocation] = useLocation();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,8 +67,21 @@ export default function Navigation({
                 <Button variant="ghost" size="icon" data-testid="button-favorites">
                   <Heart className="h-5 w-5" />
                 </Button>
-                <Button variant="ghost" size="icon" data-testid="button-messages">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setLocation('/messages')}
+                  data-testid="button-messages"
+                >
                   <MessageCircle className="h-5 w-5" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setLocation('/swap-requests')}
+                  data-testid="button-swap-requests"
+                >
+                  <ArrowLeftRight className="h-5 w-5" />
                 </Button>
                 {!isSubscribed && (
                   <Button size="sm" data-testid="button-upgrade">
