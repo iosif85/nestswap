@@ -668,7 +668,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       body('maxGuests').isInt({ min: 1, max: 50 }),
       body('bedrooms').isInt({ min: 0, max: 20 }),
       body('bathrooms').isInt({ min: 0, max: 10 }),
-      body('pricePerNight').isFloat({ min: 0 }),
       body('amenities').optional().isArray(),
       body('photos').optional().isArray(),
       body('houseRules').optional().trim().isLength({ max: 1000 }),
@@ -696,7 +695,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           maxGuests,
           bedrooms,
           bathrooms,
-          pricePerNight,
           amenities,
           photos,
           houseRules
@@ -715,7 +713,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           maxGuests,
           bedrooms,
           bathrooms,
-          pricePerNight: pricePerNight.toString(),
           amenities: amenities || [],
           houseRules: houseRules || null,
         };
@@ -752,7 +749,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       body('maxGuests').optional().isInt({ min: 1, max: 50 }),
       body('bedrooms').optional().isInt({ min: 0, max: 20 }),
       body('bathrooms').optional().isInt({ min: 0, max: 10 }),
-      body('pricePerNight').optional().isFloat({ min: 0 }),
       body('amenities').optional().isArray(),
       body('isActive').optional().isBoolean(),
     ],
@@ -779,7 +775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const updates: any = {};
         const allowedFields = [
           'title', 'description', 'type', 'address', 'city', 'country', 'latitude', 'longitude',
-          'maxGuests', 'bedrooms', 'bathrooms', 'pricePerNight', 'amenities', 'houseRules', 'isActive'
+          'maxGuests', 'bedrooms', 'bathrooms', 'amenities', 'houseRules', 'isActive'
         ];
 
         allowedFields.forEach(field => {

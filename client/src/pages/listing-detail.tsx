@@ -232,12 +232,6 @@ export default function ListingDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span>Request a Swap</span>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold" data-testid="text-price-per-night">
-                      £{listing.pricePerNight}
-                    </div>
-                    <div className="text-sm text-muted-foreground">per night</div>
-                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">

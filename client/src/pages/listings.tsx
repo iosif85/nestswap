@@ -274,7 +274,6 @@ export default function ListingsPage() {
                 type: listing.type,
                 latitude: parseFloat(listing.latitude) || 54.5,
                 longitude: parseFloat(listing.longitude) || -2,
-                price: `£${listing.pricePerNight}`,
                 rating: 4.5,
                 imageUrl: listing.photos?.[0]?.url || '/placeholder-image.jpg'
               }))}
@@ -310,8 +309,6 @@ export default function ListingsPage() {
                 <SelectContent>
                   <SelectItem value="newest">Newest first</SelectItem>
                   <SelectItem value="oldest">Oldest first</SelectItem>
-                  <SelectItem value="price_low">Price: Low to High</SelectItem>
-                  <SelectItem value="price_high">Price: High to Low</SelectItem>
                   {userLocation && (
                     <SelectItem value="distance">Distance</SelectItem>
                   )}
