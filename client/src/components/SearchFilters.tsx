@@ -13,8 +13,6 @@ interface SearchFiltersState {
   guests: string;
   bedrooms: string;
   bathrooms: string;
-  minPrice: string;
-  maxPrice: string;
   checkIn: string;
   checkOut: string;
   amenities: string[];
@@ -40,8 +38,6 @@ export default function SearchFilters({
     guests: '',
     bedrooms: '',
     bathrooms: '',
-    minPrice: '',
-    maxPrice: '',
     checkIn: '',
     checkOut: '',
     amenities: [],
@@ -67,8 +63,6 @@ export default function SearchFilters({
   const sortOptions = [
     { value: 'newest', label: 'Newest first' },
     { value: 'oldest', label: 'Oldest first' },
-    { value: 'price_low', label: 'Price: Low to High' },
-    { value: 'price_high', label: 'Price: High to Low' },
     { value: 'distance', label: 'Distance' }
   ];
 
@@ -92,8 +86,6 @@ export default function SearchFilters({
       guests: '',
       bedrooms: '',
       bathrooms: '',
-      minPrice: '',
-      maxPrice: '',
       checkIn: '',
       checkOut: '',
       amenities: [],
@@ -109,8 +101,6 @@ export default function SearchFilters({
     filters.guests,
     filters.bedrooms,
     filters.bathrooms,
-    filters.minPrice,
-    filters.maxPrice,
     filters.checkIn,
     filters.checkOut,
     ...filters.amenities
@@ -294,29 +284,6 @@ export default function SearchFilters({
             </div>
           </div>
 
-          {/* Price Range */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Min Price per night</label>
-              <Input
-                type="number"
-                placeholder="£0"
-                value={filters.minPrice}
-                onChange={(e) => handleFilterChange('minPrice', e.target.value)}
-                data-testid="input-min-price"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Max Price per night</label>
-              <Input
-                type="number"
-                placeholder="£1000"
-                value={filters.maxPrice}
-                onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
-                data-testid="input-max-price"
-              />
-            </div>
-          </div>
 
           {/* Amenities */}
           <div>
@@ -388,20 +355,6 @@ export default function SearchFilters({
                     <X
                       className="h-3 w-3 cursor-pointer hover:text-destructive"
                       onClick={() => handleFilterChange('bathrooms', '')}
-                    />
-                  </Badge>
-                )}
-                {(filters.minPrice || filters.maxPrice) && (
-                  <Badge variant="secondary" className="flex items-center gap-1">
-                    <span>
-                      £{filters.minPrice || '0'} - £{filters.maxPrice || '∞'}
-                    </span>
-                    <X
-                      className="h-3 w-3 cursor-pointer hover:text-destructive"
-                      onClick={() => {
-                        handleFilterChange('minPrice', '');
-                        handleFilterChange('maxPrice', '');
-                      }}
                     />
                   </Badge>
                 )}
