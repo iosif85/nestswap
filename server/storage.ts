@@ -58,6 +58,8 @@ export interface IStorage {
   getListingsByOwner(ownerId: string): Promise<ListingWithPhotos[]>;
   updateListing(id: string, updates: Partial<Listing>): Promise<Listing>;
   deleteListing(id: string): Promise<void>;
+  deactivateUserListings(ownerId: string): Promise<void>;
+  reactivateUserListings(ownerId: string): Promise<void>;
   searchListings(
     filters: any,
     coordinates?: { lat: number; lng: number },
@@ -860,6 +862,18 @@ export class PostgresStorage implements IStorage {
         .set({ isActive: !listing.isActive, updatedAt: new Date() })
         .where(eq(listings.id, listingId));
     }
+  }
+
+  async deactivateUserListings(ownerId: string): Promise<void> {
+    await db.update(listings)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(listings.ownerId, ownerId));
+  }
+
+  async reactivateUserListings(ownerId: string): Promise<void> {
+    await db.update(listings)
+      .set({ isActive: true, updatedAt: new Date() })
+      .where(eq(listings.ownerId, ownerId));
   }
 
   // Notification operations
