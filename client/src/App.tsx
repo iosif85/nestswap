@@ -484,13 +484,31 @@ function AppContent() {
               </DialogHeader>
               <AuthForms
                 onLogin={(email: string, password: string) => handleLogin(email, password)}
-                onRegister={(userData: any) => {
-                  // For now, redirect to login after registration
-                  setShowAuthModal(false);
-                  toast({
-                    title: 'Registration successful!',
-                    description: 'Please log in with your credentials.',
-                  });
+                onRegister={async (userData: any) => {
+                  try {
+                    setIsLoading(true);
+                    const response = await apiRequest('POST', '/api/auth/register', {
+                      email: userData.email,
+                      password: userData.password,
+                      name: userData.name,
+                      phone: userData.phone,
+                      country: userData.country,
+                    });
+                    
+                    toast({
+                      title: 'Registration successful!',
+                      description: 'Please check your email to verify your account.',
+                    });
+                    setShowAuthModal(false);
+                  } catch (error: any) {
+                    toast({
+                      title: 'Registration failed',
+                      description: error.message || 'Failed to create account',
+                      variant: 'destructive',
+                    });
+                  } finally {
+                    setIsLoading(false);
+                  }
                 }}
               />
             </DialogContent>

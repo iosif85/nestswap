@@ -360,8 +360,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         bedrooms, 
         bathrooms,
         amenities,
-        minPrice,
-        maxPrice,
         sortBy = 'newest',
         page = 1,
         limit = 20,
@@ -474,16 +472,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsedGuests = parsePositiveInt(guests, 'Guests', 50);
       const parsedBedrooms = parsePositiveInt(bedrooms, 'Bedrooms', 20);
       const parsedBathrooms = parsePositiveInt(bathrooms, 'Bathrooms', 20);
-      const parsedMinPrice = parsePositiveDecimal(minPrice, 'Min price');
-      const parsedMaxPrice = parsePositiveDecimal(maxPrice, 'Max price');
-      
-      // Validate price range consistency
-      if (parsedMinPrice !== undefined && parsedMaxPrice !== undefined && parsedMinPrice > parsedMaxPrice) {
-        validationErrors.push('Minimum price cannot be greater than maximum price');
-      }
+      // Price filtering removed - NestSwap is a swap platform, not a rental platform
       
       // Validate sort parameter
-      const validSortOptions = ['newest', 'oldest', 'price_low', 'price_high', 'distance'];
+      const validSortOptions = ['newest', 'oldest', 'distance'];
       let sortOption = 'newest';
       if (sortBy && typeof sortBy === 'string') {
         if (!validSortOptions.includes(sortBy)) {
@@ -546,13 +538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filters.bathrooms = parsedBathrooms;
       }
       
-      // Add validated price filters
-      if (parsedMinPrice !== undefined) {
-        filters.minPrice = parsedMinPrice;
-      }
-      if (parsedMaxPrice !== undefined) {
-        filters.maxPrice = parsedMaxPrice;
-      }
+      // Price filters removed - swap platform doesn't use pricing
 
       // Date filters for availability
       if (validCheckIn) {
@@ -935,7 +921,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     [
       body('date').isDate(),
       body('isAvailable').isBoolean(),
-      body('priceOverride').optional().isFloat({ min: 0 }),
+      // Price override removed - swap platform doesn't use pricing
     ],
     async (req: AuthRequest, res: express.Response) => {
       try {
