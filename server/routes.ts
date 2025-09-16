@@ -4,11 +4,12 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { body, validationResult } from "express-validator";
-import { storage } from "./storage";
+import { storage, db } from "./storage";
 import { AuthService, authenticateToken, requireSubscription, requireAdmin, type AuthRequest } from "./auth-middleware";
 import { emailService } from "./email-service";
 import type { InsertUser } from "@shared/schema";
-import { insertSwapSchema } from "@shared/schema";
+import { insertSwapSchema, users } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 // Rate limiting configurations
@@ -656,6 +657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/listings', 
     authenticateToken,
+    requireSubscription, // Premium users only
     [
       body('title').trim().isLength({ min: 5, max: 100 }),
       body('description').trim().isLength({ min: 20, max: 2000 }),
@@ -739,6 +741,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/listings/:id',
     authenticateToken,
+    requireSubscription, // Premium users only
     [
       body('title').optional().trim().isLength({ min: 5, max: 100 }),
       body('description').optional().trim().isLength({ min: 20, max: 2000 }),
@@ -793,7 +796,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  app.delete('/api/listings/:id', authenticateToken, async (req: AuthRequest, res: express.Response) => {
+  app.delete('/api/listings/:id', authenticateToken, requireSubscription, async (req: AuthRequest, res: express.Response) => { // Premium users only
     try {
       if (!req.user) {
         return res.status(401).json({ error: 'Not authenticated' });
@@ -834,6 +837,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Photo management routes
   app.post('/api/listings/:id/photos',
     authenticateToken,
+    requireSubscription, // Premium users only
     [
       body('url').isURL(),
       body('caption').optional().isLength({ max: 200 }),
@@ -927,6 +931,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/listings/:id/availability',
     authenticateToken,
+    requireSubscription, // Premium users only
     [
       body('date').isDate(),
       body('isAvailable').isBoolean(),
@@ -1083,6 +1088,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error('Get subscription status error:', error);
         res.status(500).json({ error: 'Failed to get subscription status' });
+      }
+    }
+  );
+
+  // Webhook endpoint for Stripe subscription status changes
+  app.post('/api/webhooks/subscription',
+    express.raw({ type: 'application/json' }),
+    async (req: express.Request, res: express.Response) => {
+      try {
+        // For development/testing without Stripe keys
+        if (!process.env.STRIPE_SECRET_KEY) {
+          console.log('Mock webhook received - subscription status change');
+          return res.status(200).json({ received: true, mockMode: true });
+        }
+
+        // TODO: Add real Stripe webhook signature verification when Stripe keys are configured
+        // const signature = req.headers['stripe-signature'];
+        // Verify webhook signature here
+
+        const event = req.body;
+        console.log('Subscription webhook event:', event.type);
+
+        // Handle subscription status changes
+        if (event.type === 'customer.subscription.updated' || 
+            event.type === 'customer.subscription.deleted' ||
+            event.type === 'invoice.payment_failed') {
+          
+          const subscription = event.data.object;
+          const customerId = subscription.customer;
+          
+          // Find user by stripe customer ID - using a simple query
+          const allUsers = await db.select().from(users).where(eq(users.stripeCustomerId, customerId));
+          const user = allUsers[0];
+          
+          if (user) {
+            const oldStatus = user.subscriptionStatus;
+            let newStatus = subscription.status;
+            
+            // Update user subscription status
+            await storage.updateUserSubscription(user.id, {
+              subscriptionStatus: newStatus,
+              subscriptionCurrentPeriodEnd: subscription.current_period_end ? 
+                new Date(subscription.current_period_end * 1000) : undefined
+            });
+
+            // Handle listing activation/deactivation based on subscription status
+            const wasActive = oldStatus === 'active' || oldStatus === 'trialing';
+            const isNowActive = newStatus === 'active' || newStatus === 'trialing';
+
+            if (wasActive && !isNowActive) {
+              // Subscription became inactive - deactivate listings
+              await storage.deactivateUserListings(user.id);
+              console.log(`Deactivated listings for user ${user.id} due to subscription ${newStatus}`);
+            } else if (!wasActive && isNowActive) {
+              // Subscription became active - reactivate listings
+              await storage.reactivateUserListings(user.id);
+              console.log(`Reactivated listings for user ${user.id} due to subscription ${newStatus}`);
+            }
+          }
+        }
+
+        res.status(200).json({ received: true });
+      } catch (error) {
+        console.error('Webhook error:', error);
+        res.status(400).json({ error: 'Webhook processing failed' });
       }
     }
   );
