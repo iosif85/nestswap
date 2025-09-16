@@ -25,6 +25,7 @@ import MessageThread from './components/MessageThread';
 import Footer from './components/Footer';
 import PaywallModal from './components/PaywallModal';
 import ThemeToggle from './components/ThemeToggle';
+import { UserProvider, useUser } from './contexts/UserContext';
 
 // Import pages
 import ListingsPage from './pages/listings';
@@ -396,16 +397,27 @@ function Router() {
   );
 }
 
-function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isSubscribed, setIsSubscribed] = useState(false);
+function AppContent() {
+  const { isAuthenticated, isSubscriber, login, logout, refreshUser } = useUser();
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const { toast } = useToast();
 
-  // Mock authentication functions //todo: remove mock functionality
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-    setShowAuthModal(false);
+  const handleLogin = async (email: string, password: string) => {
+    try {
+      await login(email, password);
+      setShowAuthModal(false);
+      toast({
+        title: 'Welcome back!',
+        description: 'You have successfully logged in.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Login failed',
+        description: error.message || 'Please check your credentials and try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleSignup = () => {
@@ -413,19 +425,26 @@ function App() {
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    setIsSubscribed(false);
+    logout();
+    toast({
+      title: 'Logged out',
+      description: 'You have been successfully logged out.',
+    });
   };
 
   const handleUpgrade = () => {
-    setIsSubscribed(true);
     setShowPaywall(false);
+    refreshUser(); // Refresh user data to get updated subscription status
+    toast({
+      title: 'Success!',
+      description: 'Your premium membership is now active!',
+    });
   };
 
   const handleSwapRequest = () => {
     if (!isAuthenticated) {
       setShowAuthModal(true);
-    } else if (!isSubscribed) {
+    } else if (!isSubscriber) {
       setShowPaywall(true);
     } else {
       console.log('Swap request initiated');
@@ -439,7 +458,7 @@ function App() {
           {/* Navigation */}
           <Navigation
             isAuthenticated={isAuthenticated}
-            isSubscribed={isSubscribed}
+            isSubscribed={isSubscriber}
             onLogin={() => setShowAuthModal(true)}
             onSignup={() => setShowAuthModal(true)}
           />
@@ -464,8 +483,15 @@ function App() {
                 <DialogTitle>Join NestSwap</DialogTitle>
               </DialogHeader>
               <AuthForms
-                onLogin={handleLogin}
-                onRegister={handleLogin}
+                onLogin={(email: string, password: string) => handleLogin(email, password)}
+                onRegister={(userData: any) => {
+                  // For now, redirect to login after registration
+                  setShowAuthModal(false);
+                  toast({
+                    title: 'Registration successful!',
+                    description: 'Please log in with your credentials.',
+                  });
+                }}
               />
             </DialogContent>
           </Dialog>
@@ -494,9 +520,15 @@ function App() {
                   size="sm"
                   variant="outline"
                   className="w-full text-xs h-6"
-                  onClick={() => setIsAuthenticated(!isAuthenticated)}
+                  onClick={() => {
+                    if (isAuthenticated) {
+                      handleLogout();
+                    } else {
+                      setShowAuthModal(true);
+                    }
+                  }}
                 >
-                  Toggle Auth ({isAuthenticated ? 'On' : 'Off'})
+                  {isAuthenticated ? 'Logout' : 'Login'}
                 </Button>
               </div>
             </div>
@@ -504,6 +536,19 @@ function App() {
         </div>
         <Toaster />
       </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <UserProvider>
+        <TooltipProvider>
+          <AppContent />
+          <Toaster />
+        </TooltipProvider>
+      </UserProvider>
     </QueryClientProvider>
   );
 }
