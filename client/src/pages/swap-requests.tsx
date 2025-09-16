@@ -11,6 +11,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { SwapWithDetails } from '@shared/schema';
+import { usePremiumGate } from '@/hooks/usePremiumGate';
+import PaywallModal from '@/components/PaywallModal';
 
 function SwapRequestCard({ swap, isIncoming }: { swap: SwapWithDetails; isIncoming: boolean }) {
   const { toast } = useToast();
@@ -289,6 +291,35 @@ function SwapRequestCard({ swap, isIncoming }: { swap: SwapWithDetails; isIncomi
 
 export default function SwapRequestsPage() {
   const [activeTab, setActiveTab] = useState<'incoming' | 'outgoing'>('incoming');
+  const { isAuthenticated, isSubscriber } = usePremiumGate();
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  // Premium gate - early return for non-subscribers
+  if (!isAuthenticated || !isSubscriber) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4 max-w-md">
+          <h1 className="text-2xl font-bold">Premium Feature</h1>
+          <p className="text-muted-foreground">
+            Managing swap requests requires {!isAuthenticated ? 'logging in and ' : ''}a NestSwap Premium membership.
+          </p>
+          <div className="space-x-4">
+            {!isAuthenticated ? (
+              <Button onClick={() => window.location.href = '/auth'}>Login</Button>
+            ) : (
+              <Button onClick={() => setShowPaywall(true)}>Upgrade to Premium</Button>
+            )}
+            <Button variant="outline" onClick={() => window.location.href = '/'}>Go Home</Button>
+          </div>
+          <PaywallModal 
+            isOpen={showPaywall} 
+            onClose={() => setShowPaywall(false)}
+            feature="managing swap requests"
+          />
+        </div>
+      </div>
+    );
+  }
 
   const { data: swaps = [], isLoading, error } = useQuery<SwapWithDetails[]>({
     queryKey: ['/api/swaps'],

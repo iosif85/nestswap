@@ -14,6 +14,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { usePremiumGate } from '@/hooks/usePremiumGate';
+import PaywallModal from '@/components/PaywallModal';
 
 const createListingSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters').max(100),
@@ -50,9 +52,38 @@ const AMENITIES_OPTIONS = [
 export default function CreateListingPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { isAuthenticated, isSubscriber } = usePremiumGate();
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [photos, setPhotos] = useState<Array<{ url: string; caption?: string }>>([]);
   const [currentStep, setCurrentStep] = useState(1);
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  // Check premium access and redirect if needed - avoid setState during render
+  if (!isAuthenticated || !isSubscriber) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold">Premium Feature</h1>
+          <p className="text-muted-foreground">
+            Creating listings requires {!isAuthenticated ? 'logging in and ' : ''}a NestSwap Premium membership.
+          </p>
+          <div className="space-x-4">
+            {!isAuthenticated ? (
+              <Button onClick={() => setLocation('/auth')}>Login</Button>
+            ) : (
+              <Button onClick={() => setShowPaywall(true)}>Upgrade to Premium</Button>
+            )}
+            <Button variant="outline" onClick={() => setLocation('/')}>Go Home</Button>
+          </div>
+          <PaywallModal 
+            isOpen={showPaywall} 
+            onClose={() => setShowPaywall(false)}
+            feature="creating listings"
+          />
+        </div>
+      </div>
+    );
+  }
 
   const form = useForm<CreateListingForm>({
     resolver: zodResolver(createListingSchema),
