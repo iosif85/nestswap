@@ -1122,7 +1122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }, {
           message: "Swap must be at least 1 day long",
           path: ["endDate"],
-        }).strict(); // Only allow specified fields
+        }); // Schema validation complete
 
         const swapValidation = createSwapSchema.safeParse(req.body);
 
