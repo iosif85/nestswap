@@ -8,6 +8,7 @@ import {
   availability, 
   messages, 
   swaps,
+  notifications,
   type User, 
   type InsertUser,
   type InsertUserWithPassword, 
@@ -21,6 +22,8 @@ import {
   type InsertMessage,
   type Swap,
   type InsertSwap,
+  type Notification,
+  type InsertNotification,
   type UserWithSubscription,
   type ListingWithPhotos,
   type MessageWithSender,
@@ -31,7 +34,7 @@ import {
 const connectionString = process.env.DATABASE_URL!;
 const client = postgres(connectionString);
 export const db = drizzle(client, { 
-  schema: { users, listings, photos, availability, messages, swaps }
+  schema: { users, listings, photos, availability, messages, swaps, notifications }
 });
 
 // Storage interface
@@ -93,6 +96,13 @@ export interface IStorage {
   updateSwapStatus(id: string, status: "pending" | "accepted" | "declined" | "cancelled"): Promise<Swap>;
   checkSwapConflicts(requesterListingId: string, requestedListingId: string, startDate: Date, endDate: Date): Promise<Swap[]>;
   acceptSwapWithConflictCheck(id: string): Promise<Swap>;
+  
+  // Notification operations
+  createNotification(notification: InsertNotification & { userId: string }): Promise<Notification>;
+  getUserNotifications(userId: string, limit?: number): Promise<Notification[]>;
+  markNotificationAsRead(id: string): Promise<void>;
+  markAllNotificationsAsRead(userId: string): Promise<void>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
   
   // Admin operations
   getAllUsers(limit?: number, offset?: number): Promise<User[]>;
@@ -602,6 +612,17 @@ export class PostgresStorage implements IStorage {
   // Swap operations
   async createSwap(swapData: InsertSwap & { requesterId: string }): Promise<Swap> {
     const [swap] = await db.insert(swaps).values(swapData).returning();
+
+    // Create notification for property owner about new swap request
+    await this.createNotification({
+      userId: swapData.requestedUserId,
+      type: 'swap_request_received',
+      title: 'New Swap Request',
+      message: 'Someone wants to swap with your property!',
+      swapId: swap.id,
+      isRead: false,
+    });
+
     return swap;
   }
 
@@ -666,10 +687,58 @@ export class PostgresStorage implements IStorage {
   }
 
   async updateSwapStatus(id: string, status: "pending" | "accepted" | "declined" | "cancelled"): Promise<Swap> {
+    // Get the swap details first
+    const swapDetails = await this.getSwapById(id);
+    if (!swapDetails) {
+      throw new Error('Swap not found');
+    }
+
     const [swap] = await db.update(swaps)
       .set({ status, updatedAt: new Date() })
       .where(eq(swaps.id, id))
       .returning();
+
+    // Create notifications based on status change
+    if (status === 'accepted') {
+      await this.createNotification({
+        userId: swapDetails.requesterId,
+        type: 'swap_request_accepted',
+        title: 'Swap Request Accepted!',
+        message: `Your swap request for ${swapDetails.requestedListing.title} has been accepted!`,
+        swapId: swap.id,
+        isRead: false,
+      });
+    } else if (status === 'declined') {
+      await this.createNotification({
+        userId: swapDetails.requesterId,
+        type: 'swap_request_declined',
+        title: 'Swap Request Declined',
+        message: `Your swap request for ${swapDetails.requestedListing.title} has been declined.`,
+        swapId: swap.id,
+        isRead: false,
+      });
+    } else if (status === 'cancelled') {
+      // Notify both parties about cancellation
+      await Promise.all([
+        this.createNotification({
+          userId: swapDetails.requesterId,
+          type: 'swap_cancelled',
+          title: 'Swap Cancelled',
+          message: `The swap for ${swapDetails.requestedListing.title} has been cancelled.`,
+          swapId: swap.id,
+          isRead: false,
+        }),
+        this.createNotification({
+          userId: swapDetails.requestedUserId,
+          type: 'swap_cancelled',
+          title: 'Swap Cancelled',
+          message: `The swap for ${swapDetails.requesterListing.title} has been cancelled.`,
+          swapId: swap.id,
+          isRead: false,
+        })
+      ]);
+    }
+
     return swap;
   }
 
@@ -805,6 +874,39 @@ export class PostgresStorage implements IStorage {
         .set({ isActive: !listing.isActive, updatedAt: new Date() })
         .where(eq(listings.id, listingId));
     }
+  }
+
+  // Notification operations
+  async createNotification(notificationData: InsertNotification & { userId: string }): Promise<Notification> {
+    const [notification] = await db.insert(notifications).values(notificationData).returning();
+    return notification;
+  }
+
+  async getUserNotifications(userId: string, limit = 50): Promise<Notification[]> {
+    return await db.select()
+      .from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit);
+  }
+
+  async markNotificationAsRead(id: string): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, id));
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true })
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const [result] = await db.select({ count: sql<number>`count(*)` })
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+    return result.count;
   }
 }
 

@@ -1355,6 +1355,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Notification routes
+  app.get('/api/notifications', 
+    authenticateToken,
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        if (!req.user) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+        const notifications = await storage.getUserNotifications(req.user.id, limit);
+        res.json(notifications);
+      } catch (error) {
+        console.error('Get notifications error:', error);
+        res.status(500).json({ error: 'Failed to get notifications' });
+      }
+    }
+  );
+
+  app.get('/api/notifications/unread-count', 
+    authenticateToken,
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        if (!req.user) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const count = await storage.getUnreadNotificationCount(req.user.id);
+        res.json({ count });
+      } catch (error) {
+        console.error('Get unread count error:', error);
+        res.status(500).json({ error: 'Failed to get unread count' });
+      }
+    }
+  );
+
+  app.post('/api/notifications/:id/read', 
+    authenticateToken,
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        if (!req.user) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const { id } = req.params;
+        await storage.markNotificationAsRead(id);
+        res.json({ success: true });
+      } catch (error) {
+        console.error('Mark notification as read error:', error);
+        res.status(500).json({ error: 'Failed to mark notification as read' });
+      }
+    }
+  );
+
+  app.post('/api/notifications/read-all', 
+    authenticateToken,
+    async (req: AuthRequest, res: express.Response) => {
+      try {
+        if (!req.user) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        await storage.markAllNotificationsAsRead(req.user.id);
+        res.json({ success: true });
+      } catch (error) {
+        console.error('Mark all notifications as read error:', error);
+        res.status(500).json({ error: 'Failed to mark all notifications as read' });
+      }
+    }
+  );
+
   // Messaging routes
   app.get('/api/messages/threads', authenticateToken, async (req: AuthRequest, res) => {
     try {

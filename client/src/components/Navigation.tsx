@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Menu, X, User, MessageCircle, Heart, Bell, ArrowLeftRight } from 'lucide-react';
+import { Search, Menu, X, User, MessageCircle, Heart, ArrowLeftRight } from 'lucide-react';
+import NotificationDropdown from '@/components/NotificationDropdown';
 
 interface NavigationProps {
   isAuthenticated?: boolean;
@@ -61,9 +62,7 @@ export default function Navigation({
           <div className="hidden md:flex items-center space-x-4">
             {isAuthenticated ? (
               <>
-                <Button variant="ghost" size="icon" data-testid="button-notifications">
-                  <Bell className="h-5 w-5" />
-                </Button>
+                <NotificationDropdown />
                 <Button variant="ghost" size="icon" data-testid="button-favorites">
                   <Heart className="h-5 w-5" />
                 </Button>
