@@ -228,7 +228,6 @@ export default function SubscribePage() {
               
               <div className="mt-4 space-y-2 text-sm text-muted-foreground">
                 <p>✓ Cancel anytime</p>
-                <p>✓ 7-day free trial</p>
                 <p>✓ Secure payment processing</p>
               </div>
             </CardContent>
@@ -296,7 +295,7 @@ export default function SubscribePage() {
             <div>
               <h3 className="font-semibold mb-2">Do you offer refunds?</h3>
               <p className="text-sm text-muted-foreground">
-                We offer a 7-day free trial, so you can try all premium features risk-free. If you're not satisfied, you can cancel within the trial period at no charge.
+                Get immediate access to all premium features for just £10/year. You can cancel your subscription anytime from your account settings.
               </p>
             </div>
           </CardContent>
