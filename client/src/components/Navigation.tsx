@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Menu, X, User, MessageCircle, Heart, ArrowLeftRight } from 'lucide-react';
+import { Search, Menu, X, User, MessageCircle, Heart, ArrowLeftRight, Bell } from 'lucide-react';
 import NotificationDropdown from '@/components/NotificationDropdown';
 
 interface NavigationProps {

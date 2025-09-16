@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
-import { Bell, Check, X } from 'lucide-react';
+import { Bell, Check, CheckCircle, XCircle, Ban, Mail, ArrowLeftRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -67,15 +67,15 @@ export default function NotificationDropdown() {
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'swap_request_received':
-        return '🔄';
+        return <ArrowLeftRight className="h-4 w-4 text-blue-500" />;
       case 'swap_request_accepted':
-        return '✅';
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'swap_request_declined':
-        return '❌';
+        return <XCircle className="h-4 w-4 text-red-500" />;
       case 'swap_cancelled':
-        return '🚫';
+        return <Ban className="h-4 w-4 text-orange-500" />;
       default:
-        return '📧';
+        return <Mail className="h-4 w-4 text-gray-500" />;
     }
   };
 
@@ -138,9 +138,9 @@ export default function NotificationDropdown() {
                 data-testid={`notification-${notification.id}`}
               >
                 <div className="flex items-start space-x-2 w-full">
-                  <span className="text-lg">
+                  <div className="mt-1">
                     {getNotificationIcon(notification.type)}
-                  </span>
+                  </div>
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium leading-none">
