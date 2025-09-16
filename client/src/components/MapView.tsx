@@ -9,7 +9,6 @@ interface Property {
   type: 'caravan' | 'cabin' | 'motorhome' | 'tent' | 'other';
   latitude: number;
   longitude: number;
-  price?: string;
   rating: number;
   imageUrl: string;
   address?: string;
@@ -230,7 +229,7 @@ export default function MapView({
                     : 'bg-primary text-white'
                 }`}>
                   <MapPin className="h-3 w-3" />
-                  <span>{property.price || 'Swap'}</span>
+                  <span>Available</span>
                 </div>
                 
                 {/* Marker Point */}
@@ -299,11 +298,6 @@ export default function MapView({
                 <div className="text-sm text-muted-foreground">
                   ⭐ {selectedProperty.rating} rating
                 </div>
-                {selectedProperty.price && (
-                  <div className="text-lg font-semibold text-primary">
-                    {selectedProperty.price}/night
-                  </div>
-                )}
               </div>
               
               {selectedProperty.amenities && selectedProperty.amenities.length > 0 && (

@@ -17,8 +17,6 @@ interface SearchFiltersState {
   guests: string;
   bedrooms: string;
   bathrooms: string;
-  minPrice: string;
-  maxPrice: string;
   checkIn: string;
   checkOut: string;
   amenities: string[];
@@ -47,8 +45,6 @@ export default function ListingsPage() {
     guests: '',
     bedrooms: '',
     bathrooms: '',
-    minPrice: '',
-    maxPrice: '',
     checkIn: '',
     checkOut: '',
     amenities: [],
@@ -144,8 +140,6 @@ export default function ListingsPage() {
       guests: '',
       bedrooms: '',
       bathrooms: '',
-      minPrice: '',
-      maxPrice: '',
       checkIn: '',
       checkOut: '',
       amenities: [],
@@ -343,7 +337,6 @@ export default function ListingsPage() {
                     title={listing.title}
                     type={listing.type}
                     location={`${listing.city}, ${listing.country}`}
-                    price={`£${listing.pricePerNight}`}
                     rating={4.5} // TODO: Calculate from reviews
                     reviewCount={12} // TODO: Get from reviews
                     capacity={listing.maxGuests}

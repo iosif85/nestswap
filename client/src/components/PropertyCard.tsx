@@ -8,7 +8,6 @@ interface PropertyCardProps {
   title: string;
   type: 'caravan' | 'cabin';
   location: string;
-  price?: string;
   rating: number;
   reviewCount: number;
   capacity: number;
@@ -26,7 +25,6 @@ export default function PropertyCard({
   title,
   type,
   location,
-  price,
   rating,
   reviewCount,
   capacity,
@@ -139,12 +137,6 @@ export default function PropertyCard({
         {/* Price and Action */}
         <div className="flex items-center justify-between">
           <div>
-            {price && !isSwapMode && (
-              <div className="text-lg font-semibold text-card-foreground">
-                {price}
-                <span className="text-sm font-normal text-muted-foreground"> /night</span>
-              </div>
-            )}
             {isSwapMode && (
               <div className="text-sm text-primary font-medium">
                 Available for swap
