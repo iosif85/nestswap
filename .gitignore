@@ -42,3 +42,6 @@ Thumbs.db
 .env.*
 !.env.example
 nestswap/attached_assets/Pasted-*.txt
+
+# Ignore generated prompt files
+attached_assets/Pasted-*.txt
