@@ -42,5 +42,3 @@ Thumbs.db
 .env
 .env.*
 !.env.example
-# Agent prompt text files (adjust the folder if yours differs)
-attached_assets/Pasted-*.txt
