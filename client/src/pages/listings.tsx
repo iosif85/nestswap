@@ -72,10 +72,10 @@ export default function ListingsPage() {
       setFilters(prev => ({
         ...prev,
         location: locationParam || prev.location,
-        type: typeParam || prev.type,
-        guests: guestsParam || prev.guests,
-        bedrooms: bedroomsParam || prev.bedrooms,
-        bathrooms: bathroomsParam || prev.bathrooms,
+        type: typeParam === 'all' ? '' : (typeParam || prev.type),
+        guests: guestsParam === 'all' ? '' : (guestsParam || prev.guests),
+        bedrooms: bedroomsParam === 'all' ? '' : (bedroomsParam || prev.bedrooms),
+        bathrooms: bathroomsParam === 'all' ? '' : (bathroomsParam || prev.bathrooms),
         checkIn: checkInParam || prev.checkIn,
         checkOut: checkOutParam || prev.checkOut,
         amenities: amenitiesParam ? amenitiesParam.split(',') : prev.amenities,
@@ -91,7 +91,7 @@ export default function ListingsPage() {
       
       // Add all filters to URL params
       Object.entries(filters).forEach(([key, value]) => {
-        if (value && value !== '') {
+        if (value && value !== '' && value !== 'all') {
           if (key === 'amenities' && Array.isArray(value)) {
             if (value.length > 0) {
               params.append(key, value.join(','));

@@ -52,7 +52,7 @@ export default function SearchFilters({
   ];
 
   const propertyTypes = [
-    { value: '', label: 'Any type' },
+    { value: 'all', label: 'Any type' },
     { value: 'caravan', label: 'Caravan' },
     { value: 'cabin', label: 'Cabin' },
     { value: 'motorhome', label: 'Motorhome' },
@@ -233,7 +233,7 @@ export default function SearchFilters({
                   <SelectValue placeholder="Any" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="all">Any</SelectItem>
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16].map((num) => (
                     <SelectItem key={num} value={num.toString()}>
                       {num}+ guest{num > 1 ? 's' : ''}
@@ -253,7 +253,7 @@ export default function SearchFilters({
                   <SelectValue placeholder="Any" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="all">Any</SelectItem>
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
                     <SelectItem key={num} value={num.toString()}>
                       {num}+ bedroom{num > 1 ? 's' : ''}
@@ -273,7 +273,7 @@ export default function SearchFilters({
                   <SelectValue placeholder="Any" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="all">Any</SelectItem>
                   {[1, 2, 3, 4, 5, 6].map((num) => (
                     <SelectItem key={num} value={num.toString()}>
                       {num}+ bathroom{num > 1 ? 's' : ''}
