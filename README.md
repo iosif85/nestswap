@@ -3,9 +3,17 @@
 Browse unique caravans and cabins worldwide. **Browsing is free.**  
 Upgrade to **Premium (£10/year)** to **create/edit listings**, **message owners**, and **request exchanges**.
 
-> **Live demo:** <REPLIT_URL>  
-> **GitHub repo:** <GITHUB_REPO_URL>  
-> **Portfolio page:** <PORTFOLIO_URL>  
+> **Live demo:** https://269eb9cb-fef6-4108-a002-7b023e752de8-00-23hh79byt9ivk.janeway.replit.dev/  
+> **GitHub repo:** https://github.com/iosif85/nestswap  
+> **Portfolio page:** https://iosif85.github.io/
+
+---
+
+## Demo Accounts
+- **Premium:** `demo-premium@nestswap.test` / `password123`  
+- **Free:** `demo@nestswap.test` / `password123`
+
+> Registration/verification works. If SMTP isn’t configured, verification links print to the backend **Console** (Replit).
 
 ---
 
@@ -17,7 +25,6 @@ Upgrade to **Premium (£10/year)** to **create/edit listings**, **message owners
 - [Getting Started (Replit)](#getting-started-replit)
 - [Getting Started (Local)](#getting-started-local)
 - [Environment Variables](#environment-variables)
-- [Database & Seed Data](#database--seed-data)
 - [Testing](#testing)
 - [Access Control & Membership](#access-control--membership)
 - [Admin & Moderation](#admin--moderation)
@@ -38,7 +45,7 @@ Upgrade to **Premium (£10/year)** to **create/edit listings**, **message owners
 - **Exchanges (Premium)** — request, accept, decline.
 - **Premium Membership** — **Stripe** subscription (£10/year) with checkout, webhook, and billing portal.
 - **Admin** — basic moderation for users & listings (activate/deactivate).
-- **Note** — All nightly prices and price filters have been **removed** by design.
+- **Note** — Nightly prices and price filters have been **removed** by design.
 
 ---
 
@@ -75,9 +82,13 @@ Add images to `/docs/screenshots` and link them here:
 
 ## Getting Started (Replit)
 1. Fork/open the Replit project.  
-2. Add **Secrets** from `.env.example` (see below).  
-3. Click **Run** — the backend (port `5000`) and frontend (port `5173`) start together.  
-4. Open the frontend URL. If SMTP isn’t set, verification/reset emails are logged to the backend console.
+2. Add **Secrets** (instead of a `.env` file):  
+   - `JWT_SECRET`, `CSRF_SECRET` → long random strings  
+   - `FRONTEND_URL` = your Replit URL  
+   - `BACKEND_URL` = same Replit URL  
+   *(SMTP/Stripe optional; verification links print to Console if SMTP is absent.)*
+3. Click **Run** — the backend and frontend start together.  
+4. Open the app via **Open in new tab**. Use the **Demo Accounts** above.
 
 ---
 
@@ -93,20 +104,25 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -r requirements.txt
 cp ../.env.example ../.env   # fill values as needed
 alembic upgrade head
-python seed.py               # optional demo data
 python app.py                # http://localhost:5000
-Frontend
-bash
-Copy code
+````
+
+### Frontend
+
+```bash
 cd ../frontend
 npm i
 echo "VITE_API=http://localhost:5000" > .env.local
 npm run dev                  # http://localhost:5173
-Environment Variables
-Create .env (root) from .env.example:
+```
 
-ini
-Copy code
+---
+
+## Environment Variables
+
+Create `.env` (root) from `.env.example` (local) or set them in **Replit → Secrets**:
+
+```ini
 # App
 FLASK_ENV=development
 JWT_SECRET=<generate_random>
@@ -122,67 +138,65 @@ MAIL_PASSWORD=
 MAIL_USE_TLS=true
 MAIL_DEFAULT_SENDER="NestSwap <no-reply@nestswap>"
 
-# Stripe (Premium membership)
+# Stripe (Premium membership — optional for assessment)
 STRIPE_SECRET_KEY=sk_test_xxx
 STRIPE_WEBHOOK_SECRET=whsec_xxx
 STRIPE_PRICE_ID=price_xxx
 STRIPE_SUCCESS_URL=http://localhost:5173/#/billing/success
 STRIPE_CANCEL_URL=http://localhost:5173/#/billing/cancel
 STRIPE_BILLING_PORTAL_RETURN_URL=http://localhost:5173/#/billing/manage
+```
+
 Frontend needs:
 
-bash
-Copy code
+```bash
 # frontend/.env.local
 VITE_API=http://localhost:5000
-Stripe test card: 4242 4242 4242 4242 with any future expiry and any CVC (test mode only).
+```
 
-Database & Seed Data
-Run python backend/seed.py to create demo users, listings, availability, and a subscriber account.
+> **Stripe test card:** `4242 4242 4242 4242` with any future expiry and any CVC (test mode only).
 
-Seeds include:
+---
 
-Subscriber: demo+sub@nestswap.test / Demo1234!
+## Testing
 
-Free: demo+free@nestswap.test / Demo1234!
-
-Admin: admin@nestswap.test / Admin1234!
-
-If your seeds differ, update this section to match seed.py.
-
-Testing
-bash
-Copy code
+```bash
 cd backend
 pytest -q
-Covers: auth happy paths, listing CRUD, premium gates (HTTP 402 for non-subscribers), swaps, webhook effects, public search showing only is_active=true listings.
+```
 
-Access Control & Membership
-Free users: browse listings (grid/map) & view details.
+Covers: auth happy paths, listing CRUD, premium gates (HTTP 402 for non-subscribers), swaps, webhook effects, public search showing only `is_active=true` listings.
 
-Premium (subscription_status in ['active','trialing']): create/edit listings, upload photos, send/receive messages, request/manage exchanges.
+---
 
-Lapse handling: webhook sets a lapsed user’s listings to is_active=false (not deleted). User can re-subscribe and continue.
+## Access Control & Membership
 
-Admin & Moderation
-Admin dashboard to view users and listings; toggle listing visibility.
+* **Free users:** browse listings (grid/map) & view details.
+* **Premium (`subscription_status in ['active','trialing']`):** create/edit listings, upload photos, send/receive messages, request/manage exchanges.
+* **Lapse handling:** webhook sets a lapsed user’s listings to `is_active=false` (not deleted). User can re-subscribe and continue.
 
-Role: user or admin (server-side checks).
+---
 
-Security Notes
-Passwords hashed (argon2/bcrypt).
+## Admin & Moderation
 
-JWT in HttpOnly cookies; CSRF via double-submit token.
+* Admin dashboard to view users and listings; toggle listing visibility.
+* Role: `user` or `admin` (server-side checks).
 
-Rate limiting on auth/uploads.
+---
 
-Input sanitisation for user-generated content.
+## Security Notes
 
-Secrets managed via environment variables; never committed.
+* Passwords hashed (argon2/bcrypt).
+* JWT in **HttpOnly** cookies; **CSRF** via double-submit token.
+* **Rate limiting** on auth/uploads.
+* **Input sanitisation** for user-generated content.
+* Secrets managed via environment variables; never committed.
 
-Project Structure
-pgsql
-Copy code
+---
+
+## Project Structure
+
+```text
 nestswap/
   backend/
     app.py, config.py, database.py, extensions.py
@@ -199,16 +213,27 @@ nestswap/
       components/ (NavBar, Map, AvailabilityCalendar, PaywallModal, etc.)
       routes/
       styles/
-Roadmap / Future Work
-Object storage + CDN for images, Postgres DB, CI/CD pipeline.
+```
 
-Broader automated tests (Playwright/Cypress).
+---
 
-OAuth login, notifications, analytics, improved moderation.
+## Roadmap / Future Work
 
-(Optional later) Paid booking flow and Stripe Connect payouts.
+* Object storage + CDN for images, Postgres DB, CI/CD pipeline.
+* Broader automated tests (Playwright/Cypress).
+* OAuth login, notifications, analytics, improved moderation.
+* (Optional later) Paid booking flow and Stripe Connect payouts.
 
+---
 
+## Teacher Guide
 
-License
+**Teacher guide:** [TEACHER.md](TEACHER.md)
+
+---
+
+## License
+
 © 2025 Iosif Miclea. All rights reserved.
+
+
