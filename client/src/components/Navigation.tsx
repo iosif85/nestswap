@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Menu, X, User, MessageCircle, Heart, ArrowLeftRight, Bell } from 'lucide-react';
+import { Search, Menu, X, User, MessageCircle, Heart, ArrowLeftRight, Bell, Plus } from 'lucide-react';
 import NotificationDropdown from '@/components/NotificationDropdown';
 
 interface NavigationProps {
@@ -62,6 +62,16 @@ export default function Navigation({
           <div className="hidden md:flex items-center space-x-4">
             {isAuthenticated ? (
               <>
+                {isSubscribed && (
+                  <Button 
+                    onClick={() => setLocation('/create-listing')}
+                    data-testid="button-create-listing"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Create Listing
+                  </Button>
+                )}
                 <NotificationDropdown />
                 <Button variant="ghost" size="icon" data-testid="button-favorites">
                   <Heart className="h-5 w-5" />
@@ -135,6 +145,16 @@ export default function Navigation({
           <div className="md:hidden border-t border-border py-4 space-y-2">
             {isAuthenticated ? (
               <>
+                {isSubscribed && (
+                  <Button 
+                    onClick={() => setLocation('/create-listing')}
+                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                    data-testid="button-create-listing-mobile"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Listing
+                  </Button>
+                )}
                 <Button variant="ghost" className="w-full justify-start">
                   <Bell className="h-4 w-4 mr-2" />
                   Notifications
@@ -143,7 +163,11 @@ export default function Navigation({
                   <Heart className="h-4 w-4 mr-2" />
                   Favorites
                 </Button>
-                <Button variant="ghost" className="w-full justify-start">
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start"
+                  onClick={() => setLocation('/messages')}
+                >
                   <MessageCircle className="h-4 w-4 mr-2" />
                   Messages
                 </Button>
