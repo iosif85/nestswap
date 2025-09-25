@@ -129,6 +129,28 @@ export default function ListingsPage() {
     setFilters(prev => ({ ...prev, ...newFilters }));
   };
 
+  // Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    
+    // Add all filters to URL params
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value !== '' && value !== 'all') {
+        if (key === 'amenities' && Array.isArray(value)) {
+          if (value.length > 0) {
+            params.append(key, value.join(','));
+          }
+        } else {
+          params.append(key, value as string);
+        }
+      }
+    });
+
+    // Update URL without triggering a page reload
+    const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+    window.history.replaceState({}, '', newUrl);
+  }, [filters]);
+
   const handleSortChange = (sortBy: string) => {
     setFilters(prev => ({ ...prev, sortBy }));
   };
