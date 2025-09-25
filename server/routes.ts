@@ -232,6 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             avatarUrl: user.avatarUrl,
             isVerified: user.isVerified,
             subscriptionStatus: user.subscriptionStatus,
+            isSubscriber: user.subscriptionStatus === 'active' || user.subscriptionStatus === 'trialing',
             role: user.role,
           }
         });

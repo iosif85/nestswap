@@ -58,7 +58,49 @@ export default function CreateListingPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [showPaywall, setShowPaywall] = useState(false);
 
-  // Check premium access and redirect if needed - avoid setState during render
+  // Always declare form hook to maintain consistent hook order
+  const form = useForm<CreateListingForm>({
+    resolver: zodResolver(createListingSchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      type: 'caravan',
+      address: '',
+      city: '',
+      country: 'UK',
+      latitude: 0,
+      longitude: 0,
+      maxGuests: 2,
+      bedrooms: 1,
+      bathrooms: 1,
+      houseRules: '',
+    },
+  });
+
+  const createListingMutation = useMutation({
+    mutationFn: async (data: CreateListingForm & { amenities: string[]; photos: Array<{ url: string; caption?: string }> }) => {
+      const response = await apiRequest('POST', '/api/listings', data);
+      return response;
+    },
+    onSuccess: (listing) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/listings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/users/me/listings'] });
+      toast({
+        title: 'Success!',
+        description: 'Your listing has been created successfully.',
+      });
+      setLocation(`/listings/${listing.id}`);
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to create listing. Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Check premium access and redirect if needed
   if (!isAuthenticated || !isSubscriber) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -84,47 +126,6 @@ export default function CreateListingPage() {
       </div>
     );
   }
-
-  const form = useForm<CreateListingForm>({
-    resolver: zodResolver(createListingSchema),
-    defaultValues: {
-      title: '',
-      description: '',
-      type: 'caravan',
-      address: '',
-      city: '',
-      country: 'UK',
-      latitude: 0,
-      longitude: 0,
-      maxGuests: 2,
-      bedrooms: 1,
-      bathrooms: 1,
-      houseRules: '',
-    },
-  });
-
-  const createListingMutation = useMutation({
-    mutationFn: async (data: CreateListingForm & { amenities: string[]; photos: Array<{ url: string; caption?: string }> }) => {
-      const response = await apiRequest('POST', '/api/listings', data);
-      return response.json();
-    },
-    onSuccess: (listing) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/listings'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/users/me/listings'] });
-      toast({
-        title: 'Success!',
-        description: 'Your listing has been created successfully.',
-      });
-      setLocation(`/listings/${listing.id}`);
-    },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to create listing. Please try again.',
-        variant: 'destructive',
-      });
-    },
-  });
 
   const onSubmit = (data: CreateListingForm) => {
     createListingMutation.mutate({
@@ -423,29 +424,26 @@ export default function CreateListingPage() {
                   <CardTitle>Property Details</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="maxGuests"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Max Guests</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min="1"
-                              max="50"
-                              data-testid="input-max-guests"
-                              {...field}
-                              onChange={e => field.onChange(parseInt(e.target.value))}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                  </div>
+                  <FormField
+                    control={form.control}
+                    name="maxGuests"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Max Guests</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="50"
+                            data-testid="input-max-guests"
+                            {...field}
+                            onChange={e => field.onChange(parseInt(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
