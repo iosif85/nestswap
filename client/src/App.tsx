@@ -413,11 +413,53 @@ function AppContent() {
         description: 'You have successfully logged in.',
       });
     } catch (error: any) {
+      const errorMessage = error.message || 'Please check your credentials and try again.';
+      
+      // Check if it's an email verification error
+      if (errorMessage.includes('verify your email')) {
+        console.log('Detected email verification error, showing resend button');
+        toast({
+          title: 'Email verification required',
+          description: 'Please check your email and click the verification link before logging in.',
+          variant: 'destructive',
+          action: (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => handleResendVerification(email)}
+              data-testid="button-resend-verification"
+            >
+              Resend Email
+            </Button>
+          ),
+        });
+      } else {
+        toast({
+          title: 'Login failed',
+          description: errorMessage,
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
+  const handleResendVerification = async (email: string) => {
+    try {
+      setIsLoading(true);
+      await apiRequest('POST', '/api/auth/resend-verification', { email });
+      
       toast({
-        title: 'Login failed',
-        description: error.message || 'Please check your credentials and try again.',
+        title: 'Verification email sent!',
+        description: 'Please check your email and click the verification link.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Failed to resend email',
+        description: error.message || 'Please try again later.',
         variant: 'destructive',
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 

@@ -155,6 +155,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Resend verification email
+  app.post('/api/auth/resend-verification',
+    authLimiter,
+    [body('email').isEmail().normalizeEmail()],
+    async (req: express.Request, res: express.Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: 'Valid email is required' });
+        }
+
+        const { email } = req.body;
+        const user = await storage.getUserByEmail(email);
+        
+        if (!user) {
+          return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (user.isVerified) {
+          return res.status(400).json({ error: 'User is already verified' });
+        }
+
+        // Generate new verification token
+        const verificationToken = AuthService.generateEmailVerificationToken(user.id);
+
+        // Resend verification email
+        await emailService.sendEmailVerification(email, user.name, verificationToken);
+
+        res.json({ message: 'Verification email sent successfully' });
+      } catch (error) {
+        console.error('Resend verification error:', error);
+        res.status(500).json({ error: 'Failed to resend verification email' });
+      }
+    }
+  );
+
   app.post('/api/auth/login',
     authLimiter,
     [

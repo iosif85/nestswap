@@ -57,7 +57,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       const response = await apiRequest('POST', '/api/auth/login', { email, password });
       
-      if (response.token) {
+      if (response && response.token) {
         localStorage.setItem('authToken', response.token);
         setIsAuthenticated(true);
         setUser(response.user);
