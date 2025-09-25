@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -44,6 +44,21 @@ import cabinImage from '@assets/generated_images/Rustic_cabin_exterior_view_d05e
 function HomePage() {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [selectedView, setSelectedView] = useState<'grid' | 'map'>('grid');
+  const [, setLocation] = useLocation();
+
+  const handleHeroSearch = (filters: { location: string; checkIn: string; checkOut: string; guests: number }) => {
+    // Build search parameters
+    const params = new URLSearchParams();
+    if (filters.location) params.append('location', filters.location);
+    if (filters.checkIn) params.append('checkIn', filters.checkIn);
+    if (filters.checkOut) params.append('checkOut', filters.checkOut);
+    if (filters.guests > 0) params.append('guests', filters.guests.toString());
+    
+    // Navigate to listings page with search parameters
+    const searchQuery = params.toString();
+    const url = searchQuery ? `/listings?${searchQuery}` : '/listings';
+    setLocation(url);
+  };
   
   // Mock data for properties //todo: remove mock functionality
   const properties = [
@@ -112,7 +127,7 @@ function HomePage() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Hero Section */}
-      <Hero />
+      <Hero onSearch={handleHeroSearch} />
       
       {/* Search and Filters */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
