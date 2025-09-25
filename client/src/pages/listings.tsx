@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { MapPin, Filter, Grid, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,36 @@ export default function ListingsPage() {
 
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
+
+  // Read URL parameters on component mount to handle search from navigation
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const locationParam = urlParams.get('location');
+    const typeParam = urlParams.get('type');
+    const guestsParam = urlParams.get('guests');
+    const bedroomsParam = urlParams.get('bedrooms');
+    const bathroomsParam = urlParams.get('bathrooms');
+    const checkInParam = urlParams.get('checkIn');
+    const checkOutParam = urlParams.get('checkOut');
+    const amenitiesParam = urlParams.get('amenities');
+    const sortByParam = urlParams.get('sortBy');
+
+    // Update filters with URL parameters
+    if (locationParam || typeParam || guestsParam || bedroomsParam || bathroomsParam || checkInParam || checkOutParam || amenitiesParam || sortByParam) {
+      setFilters(prev => ({
+        ...prev,
+        location: locationParam || prev.location,
+        type: typeParam || prev.type,
+        guests: guestsParam || prev.guests,
+        bedrooms: bedroomsParam || prev.bedrooms,
+        bathrooms: bathroomsParam || prev.bathrooms,
+        checkIn: checkInParam || prev.checkIn,
+        checkOut: checkOutParam || prev.checkOut,
+        amenities: amenitiesParam ? amenitiesParam.split(',') : prev.amenities,
+        sortBy: sortByParam || prev.sortBy,
+      }));
+    }
+  }, []);
 
   const { data: response, isLoading, error } = useQuery({
     queryKey: ['/api/listings', filters, userLocation],

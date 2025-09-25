@@ -494,6 +494,16 @@ function AppContent() {
     }
   };
 
+  const handleSearch = (query: string) => {
+    if (query.trim()) {
+      // Navigate to listings page with search query
+      window.location.href = `/listings?location=${encodeURIComponent(query.trim())}`;
+    } else {
+      // Navigate to listings page without search
+      window.location.href = '/listings';
+    }
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -504,6 +514,7 @@ function AppContent() {
             isSubscribed={isSubscriber}
             onLogin={() => setShowAuthModal(true)}
             onSignup={() => setShowAuthModal(true)}
+            onSearch={handleSearch}
           />
 
           {/* Theme Toggle - Fixed position */}
