@@ -401,6 +401,7 @@ function AppContent() {
   const { isAuthenticated, isSubscriber, login, logout, refreshUser } = useUser();
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const handleLogin = async (email: string, password: string) => {
