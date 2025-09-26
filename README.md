@@ -3,9 +3,9 @@
 Browse unique caravans and cabins worldwide. **Browsing is free.**  
 Upgrade to **Premium (£10/year)** to **create/edit listings**, **message owners**, and **request exchanges**.
 
-> **Live demo:** https://269eb9cb-fef6-4108-a002-7b023e752de8-00-23hh79byt9ivk.janeway.replit.dev/  
-> **GitHub repo:** https://github.com/iosif85/nestswap  
-> **Portfolio page:** https://iosif85.github.io/
+**Live demo:** https://269eb9cb-fef6-4108-a002-7b023e752de8-00-23hh79byt9ivk.janeway.replit.dev/  
+**GitHub repo:** https://github.com/iosif85/nestswap  
+**Portfolio page:** https://iosif85.github.io/
 
 ---
 
@@ -13,7 +13,8 @@ Upgrade to **Premium (£10/year)** to **create/edit listings**, **message owners
 - **Premium:** `demo-premium@nestswap.test` / `password123`  
 - **Free:** `demo@nestswap.test` / `password123`
 
-> Registration/verification works. If SMTP isn’t configured, verification links print to the backend **Console** (Replit).
+> Registration/verification works. If SMTP isn’t configured, verification links print to the backend **Console** (Replit Logs).  
+> Stripe is **test mode** only.
 
 ---
 
@@ -31,64 +32,66 @@ Upgrade to **Premium (£10/year)** to **create/edit listings**, **message owners
 - [Security Notes](#security-notes)
 - [Project Structure](#project-structure)
 - [Roadmap / Future Work](#roadmap--future-work)
-- [Teacher Guide](#teacher-guide)
 - [License](#license)
 
 ---
 
 ## Features
-- **Secure Auth** — register, email verification, login, logout, password reset (JWT in HttpOnly cookies + CSRF).
+- **Secure Auth** — register, email verification, login, logout, password reset (**JWT in HttpOnly cookies + CSRF**).
 - **Profiles** — avatar, bio, country.
 - **Listings** — create/edit with photos, amenities, rules, location (map pin), and **per-day availability**.
 - **Browse & Search** — keyword, filters, and interactive **map** (Leaflet + OpenStreetMap).
 - **Messaging (Premium)** — threaded inbox between owners.
 - **Exchanges (Premium)** — request, accept, decline.
-- **Premium Membership** — **Stripe** subscription (£10/year) with checkout, webhook, and billing portal.
+- **Premium Membership** — **Stripe** subscription (£10/year) with Checkout, Webhook, and Billing Portal (**test mode**).
 - **Admin** — basic moderation for users & listings (activate/deactivate).
-- **Note** — Nightly prices and price filters have been **removed** by design.
+- **Design choice** — Nightly prices and price filters are **removed** by design (swap-first model).
 
 ---
 
 ## Screenshots
-Add images to `/docs/screenshots` and link them here:
+Screenshots live under `docs/screenshots/`. Example gallery (ensure these filenames exist):
 
-- Registration & verify email  
-- Upgrade (Premium)  
-- Create listing (photos + availability)  
-- Browse & map  
-- Message thread  
-- Exchange request flow  
-- Admin moderation
+![Homepage / Browse](docs/screenshots/nestswap-homepage.png)
+![Login](docs/screenshots/nestswap-login.png)
+![Premium Paywall](docs/screenshots/nestswap-paywall.png)
+![Create Listing](docs/screenshots/nestswap-createlisting.png)
+![Availability Calendar](docs/screenshots/nestswap-availability.png)
+![Swap Requests](docs/screenshots/nestswap-swaprequests.png)
+
+> If an image 404s: check the path `docs/screenshots/<file>.png` and filename **case**.
 
 ---
 
 ## Tech Stack
 **Frontend:** React (Vite + TypeScript), Tailwind CSS, React Router, React Query, Leaflet/OSM  
-**Backend:** Python Flask (REST), SQLAlchemy + Alembic, Marshmallow/Pydantic-style validation  
+**Backend:** Python Flask (REST), SQLAlchemy + Alembic, schema validation  
 **DB:** SQLite (MVP)  
-**Payments:** Stripe Subscriptions (Checkout + Billing Portal + Webhook)  
+**Payments:** Stripe Subscriptions (Checkout + Billing Portal + Webhook, **test mode**)  
 **Security:** Argon2/bcrypt password hashing, JWT HttpOnly + CSRF (double-submit), rate limiting, input sanitisation  
 **Dev:** Replit, GitHub, Trello, pytest
 
 ---
 
 ## Architecture
-- **Client (SPA):** routes for Auth, Listings (Browse/Detail/New/Edit), Messages (Inbox/Thread), Swaps (New/My), Billing (Upgrade/Success/Cancel), Admin.
-- **Server (API):** blueprints for `auth`, `users`, `listings`, `uploads`, `messages`, `swaps`, `billing`, `admin`.
+- **Client (SPA):** routes for Auth, Listings (Browse/Detail/New/Edit), Messages (Inbox/Thread), Swaps (New/My), Billing (Upgrade/Success/Cancel), Admin.  
+- **Server (API):** blueprints for `auth`, `users`, `listings`, `uploads`, `messages`, `swaps`, `billing`, `admin`.  
 - **Data model:** `User`, `Listing`, `Photo`, `Availability`, `Message`, `Swap`.  
-- **Images:** stored locally under `/backend/static/uploads` (MVP-friendly).
+- **Images:** stored locally under `backend/static/uploads` (MVP-friendly).
 
 ---
 
 ## Getting Started (Replit)
-1. Fork/open the Replit project.  
+1. **Open/Fork** the Replit project.  
 2. Add **Secrets** (instead of a `.env` file):  
    - `JWT_SECRET`, `CSRF_SECRET` → long random strings  
    - `FRONTEND_URL` = your Replit URL  
-   - `BACKEND_URL` = same Replit URL  
-   *(SMTP/Stripe optional; verification links print to Console if SMTP is absent.)*
-3. Click **Run** — the backend and frontend start together.  
-4. Open the app via **Open in new tab**. Use the **Demo Accounts** above.
+   - `BACKEND_URL`  = same Replit URL  
+   - *(Optional)* SMTP + Stripe test keys (see below).  
+3. Click **Run** — backend (Flask) and frontend (Vite) start together.  
+4. Open the app in a new tab and use the **Demo Accounts** above.
+
+> If SMTP isn’t set: verification & reset links appear in **Replit → Shell → Console output**.
 
 ---
 
@@ -105,24 +108,18 @@ pip install -r requirements.txt
 cp ../.env.example ../.env   # fill values as needed
 alembic upgrade head
 python app.py                # http://localhost:5000
-````
-
-### Frontend
-
-```bash
+Frontend
+bash
+Copy code
 cd ../frontend
 npm i
 echo "VITE_API=http://localhost:5000" > .env.local
 npm run dev                  # http://localhost:5173
-```
+Environment Variables
+Create .env (project root) from .env.example for local runs, or set these in Replit → Secrets:
 
----
-
-## Environment Variables
-
-Create `.env` (root) from `.env.example` (local) or set them in **Replit → Secrets**:
-
-```ini
+ini
+Copy code
 # App
 FLASK_ENV=development
 JWT_SECRET=<generate_random>
@@ -145,58 +142,45 @@ STRIPE_PRICE_ID=price_xxx
 STRIPE_SUCCESS_URL=http://localhost:5173/#/billing/success
 STRIPE_CANCEL_URL=http://localhost:5173/#/billing/cancel
 STRIPE_BILLING_PORTAL_RETURN_URL=http://localhost:5173/#/billing/manage
-```
-
 Frontend needs:
 
-```bash
+bash
+Copy code
 # frontend/.env.local
 VITE_API=http://localhost:5000
-```
+Stripe testing: use 4242 4242 4242 4242 with any future expiry and any CVC (test mode only).
 
-> **Stripe test card:** `4242 4242 4242 4242` with any future expiry and any CVC (test mode only).
-
----
-
-## Testing
-
-```bash
+Testing
+bash
+Copy code
 cd backend
 pytest -q
-```
+Covers auth happy paths, listing CRUD, premium gates (HTTP 402 for non-subscribers), swaps, webhook effects, and public search (only is_active=true listings).
 
-Covers: auth happy paths, listing CRUD, premium gates (HTTP 402 for non-subscribers), swaps, webhook effects, public search showing only `is_active=true` listings.
+Access Control & Membership
+Free users: browse listings (grid/map) & view details.
 
----
+Premium (subscription_status in ['active','trialing']): create/edit listings, upload photos, send/receive messages, request/manage exchanges.
 
-## Access Control & Membership
+Lapse handling: webhook sets a lapsed user’s listings to is_active=false (not deleted). Re-subscribe to continue.
 
-* **Free users:** browse listings (grid/map) & view details.
-* **Premium (`subscription_status in ['active','trialing']`):** create/edit listings, upload photos, send/receive messages, request/manage exchanges.
-* **Lapse handling:** webhook sets a lapsed user’s listings to `is_active=false` (not deleted). User can re-subscribe and continue.
+Admin & Moderation
+Admin dashboard to view users & listings; toggle visibility.
 
----
+Roles: user or admin (server-side checks).
 
-## Admin & Moderation
+Security Notes
+Passwords hashed (argon2/bcrypt).
 
-* Admin dashboard to view users and listings; toggle listing visibility.
-* Role: `user` or `admin` (server-side checks).
+JWT in HttpOnly cookies; CSRF via double-submit token.
 
----
+Rate limiting on auth/uploads; input sanitisation for user content.
 
-## Security Notes
+All secrets via environment variables (never committed).
 
-* Passwords hashed (argon2/bcrypt).
-* JWT in **HttpOnly** cookies; **CSRF** via double-submit token.
-* **Rate limiting** on auth/uploads.
-* **Input sanitisation** for user-generated content.
-* Secrets managed via environment variables; never committed.
-
----
-
-## Project Structure
-
-```text
+Project Structure
+text
+Copy code
 nestswap/
   backend/
     app.py, config.py, database.py, extensions.py
@@ -213,27 +197,16 @@ nestswap/
       components/ (NavBar, Map, AvailabilityCalendar, PaywallModal, etc.)
       routes/
       styles/
-```
+Roadmap / Future Work
+Object storage + CDN for images; Postgres instead of SQLite; CI/CD pipeline.
 
----
+Broader automated tests (Playwright/Cypress).
 
-## Roadmap / Future Work
+OAuth login, notifications, analytics, improved moderation.
 
-* Object storage + CDN for images, Postgres DB, CI/CD pipeline.
-* Broader automated tests (Playwright/Cypress).
-* OAuth login, notifications, analytics, improved moderation.
-* (Optional later) Paid booking flow and Stripe Connect payouts.
+(Optional later) Paid booking flow & Stripe Connect payouts.
 
----
-
-## Teacher Guide
-
-**Teacher guide:** [TEACHER.md](TEACHER.md)
-
----
-
-## License
-
+License
 © 2025 Iosif Miclea. All rights reserved.
 
 
