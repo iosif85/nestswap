@@ -50,7 +50,6 @@ Upgrade to **Premium (£10/year)** to **create/edit listings**, **message owners
 ---
 
 ## Screenshots
-Screenshots live under `docs/screenshots/`. Example gallery (ensure these filenames exist):
 
 ![Homepage / Browse](docs/screenshots/nestswap-homepage.png)
 ![Login](docs/screenshots/nestswap-login.png)
@@ -59,7 +58,7 @@ Screenshots live under `docs/screenshots/`. Example gallery (ensure these filena
 ![Availability Calendar](docs/screenshots/nestswap-availability.png)
 ![Swap Requests](docs/screenshots/nestswap-swaprequests.png)
 
-> If an image 404s: check the path `docs/screenshots/<file>.png` and filename **case**.
+
 
 ---
 
